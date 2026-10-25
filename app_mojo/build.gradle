@@ -25,7 +25,7 @@ def getVersionName = {
     }else {
         def branchName = currentBranch.getName()
         def commitAbbreviation = latestCommit.abbreviatedId
-        return "justicia-${dateToday}-${commitAbbreviation}-${branchName}"
+        return "qmxmine-${dateToday}-${commitAbbreviation}-${branchName}"
     }
 }
 
@@ -78,14 +78,14 @@ android {
     }
 
     defaultConfig {
-        applicationId "git.artdeell.mjlaunch"
+        applicationId "com.qmgamerzyt.qmxmine"
         minSdkVersion 21
         targetSdkVersion 36
         versionCode getDateSeconds()
         versionName getVersionName()
         multiDexEnabled false //important
         resValue 'string', 'curseforge_api_key', getCFApiKey()
-        resValue 'string', 'group_id', 'git.artdeell'
+        resValue 'string', 'group_id', 'com.qmgamerzyt'
     }
 
     flavorDimensions  = ["runtime"]
@@ -108,8 +108,8 @@ android {
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.customDebug
-            resValue 'string', 'application_package', 'git.artdeell.mjlaunch.debug'
-            resValue 'string', 'storageProviderAuthorities', 'git.artdeell.mjlaunch.scoped.gamefolder.debug'
+            resValue 'string', 'application_package', 'com.qmgamerzyt.qmxmine.debug'
+            resValue 'string', 'storageProviderAuthorities', 'com.qmgamerzyt.qmxmine.scoped.gamefolder.debug'
         }
         proguard {
             initWith debug
@@ -129,8 +129,8 @@ android {
             // defaultConfig already set
             // multiDexEnabled = true
             // debuggable = true
-            resValue 'string', 'storageProviderAuthorities', 'git.artdeell.mjlaunch.scoped.gamefolder'
-            resValue 'string', 'application_package', 'git.artdeell.mjlaunch'
+            resValue 'string', 'storageProviderAuthorities', 'com.qmgamerzyt.qmxmine.scoped.gamefolder'
+            resValue 'string', 'application_package', 'com.qmgamerzyt.qmxmine'
         }
         gplay {
             initWith release
