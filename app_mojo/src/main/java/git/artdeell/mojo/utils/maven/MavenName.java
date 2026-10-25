@@ -85,7 +85,7 @@ public class MavenName {
             builder.append('-').append(suffix);
         }
         String path =  builder.append(fileExtension).toString();
-        Log.i("MojoLauncher", "Path:"+path);
+        Log.i("QMxMine", "Path:"+path);
         return path;
     }
 
