@@ -35,6 +35,7 @@ import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.modding.modpacks.ModItemAdapter;
 import git.artdeell.mojo.modding.modpacks.api.CommonApi;
+import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
@@ -95,6 +96,10 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     public void performLocalInstall(Uri uri, Context context, ContentResolver contentResolver) {
             String fileName = Tools.getFileName(context, uri);
             if (fileName == null) return;
+            if (mSearchFilters.kind == ContentKind.WORLD) {
+                performLocalWorldInstall(uri, fileName, context, contentResolver);
+                return;
+            }
             File outFile = new File(Tools.DIR_CACHE, fileName + ".cf");
             ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, R.string.multirt_progress_caching);
             try (InputStream inputStream = contentResolver.openInputStream(uri);
@@ -115,6 +120,30 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
                 outFile.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
             }
+    }
+
+    /**
+     * Copy a world archive from the picker into the cache, then hand it over to the
+     * installer which asks where the world should go.
+     */
+    private void performLocalWorldInstall(Uri uri, String fileName, Context context, ContentResolver contentResolver) {
+        File outFile = new File(Tools.DIR_CACHE, "world_" + System.nanoTime() + ".zip");
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, R.string.multirt_progress_caching);
+        try (InputStream inputStream = contentResolver.openInputStream(uri);
+             OutputStream outputStream = new FileOutputStream(outFile)) {
+            if (inputStream == null) {
+                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                return;
+            }
+            IOUtils.copy(inputStream, outputStream);
+            outputStream.flush();
+        } catch (IOException e) {
+            outFile.delete();
+            Tools.showErrorRemote("Error", e);
+            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            return;
+        }
+        ContentInstaller.handleLocalWorldArchive(context, outFile, fileName);
     }
 
     public SearchModFragment(){
@@ -266,13 +295,17 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     }
 
     /**
-     * The local file picker unpacks a modpack into a profile it creates itself, so it
-     * belongs on the modpack tab and nowhere else.
+     * The local file picker either unpacks a modpack into a profile it creates itself
+     * or drops a world archive into an instance. The remaining kinds have nothing to
+     * pick from the device.
      */
     private void updateImportButton() {
         if(mImportButton == null) return;
         if(mSearchFilters.kind == ContentKind.MODPACK) {
             mImportButton.setText(R.string.import_local_modpack);
+            mImportButton.setVisibility(View.VISIBLE);
+        }else if(mSearchFilters.kind == ContentKind.WORLD) {
+            mImportButton.setText(R.string.content_import_local_world);
             mImportButton.setVisibility(View.VISIBLE);
         }else {
             mImportButton.setVisibility(View.GONE);

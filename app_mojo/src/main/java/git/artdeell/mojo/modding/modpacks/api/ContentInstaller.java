@@ -36,6 +36,13 @@ import java.util.zip.ZipFile;
 public class ContentInstaller {
 
     /**
+     * The work that happens once an instance has been chosen.
+     */
+    private interface InstallAction {
+        File run(Instance instance) throws IOException;
+    }
+
+    /**
      * Ask the user which instance should receive the content, then download it there.
      * The listing and the download happen away from the UI thread.
      *
@@ -49,8 +56,8 @@ public class ContentInstaller {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
                 Instance selected = Instances.loadSelectedInstance();
-                ContextExecutor.executeActivity(activity ->
-                        showInstancePicker(activity, instances, selected, modDetail, selectedVersion));
+                ContextExecutor.executeActivity(activity -> showInstancePicker(activity, instances, selected,
+                        instance -> install(instance, modDetail, selectedVersion)));
             }catch (IOException e) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
@@ -58,8 +65,41 @@ public class ContentInstaller {
         });
     }
 
+    /**
+     * Put a world archive that the user picked from their own storage into an instance.
+     * The archive is owned by this call and is removed once the install is over.
+     *
+     * @param context used to report errors
+     * @param archive the archive that was picked
+     * @param archiveName the name the archive was picked under
+     */
+    public static void handleLocalWorldArchive(Context context, File archive, String archiveName) {
+        String worldName = worldNameFor(FileUtils.removeExtension(archiveName));
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.global_waiting);
+        MojoApplication.sExecutorService.execute(() -> {
+            try {
+                List<Instance> instances = Instances.loadAllInstances();
+                Instance selected = Instances.loadSelectedInstance();
+                ContextExecutor.executeActivity(activity -> showInstancePicker(activity, instances, selected,
+                        instance -> {
+                            try {
+                                File saves = new File(instance.getGameDirectory(), ContentKind.WORLD.folder);
+                                FileUtils.ensureDirectory(saves);
+                                return unpackWorld(archive, saves, worldName);
+                            }finally {
+                                archive.delete();
+                            }
+                        }));
+            }catch (IOException e) {
+                archive.delete();
+                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                Tools.showErrorRemote(context, R.string.content_install_failed, e);
+            }
+        });
+    }
+
     private static void showInstancePicker(Context context, List<Instance> instances, Instance selected,
-                                           ModDetail modDetail, int selectedVersion) {
+                                           InstallAction action) {
         if(instances.isEmpty()) {
             ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
             Tools.showErrorRemote(context, R.string.content_install_no_instances,
@@ -83,8 +123,7 @@ public class ContentInstaller {
                         return;
                     }
                     Instance target = instances.get(position);
-                    MojoApplication.sExecutorService.execute(() ->
-                            installInto(context, target, modDetail, selectedVersion));
+                    MojoApplication.sExecutorService.execute(() -> installInto(context, target, action));
                 })
                 .setNegativeButton(android.R.string.cancel, (dialog, which) ->
                         ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK))
@@ -92,9 +131,9 @@ public class ContentInstaller {
                 .show();
     }
 
-    private static void installInto(Context context, Instance instance, ModDetail modDetail, int selectedVersion) {
+    private static void installInto(Context context, Instance instance, InstallAction action) {
         try {
-            install(instance, modDetail, selectedVersion);
+            action.run(instance);
             ContextExecutor.executeActivity(activity ->
                     Toast.makeText(activity, R.string.content_install_success, Toast.LENGTH_SHORT).show());
         }catch (IOException e) {
@@ -149,7 +188,7 @@ public class ContentInstaller {
             removeReplaced(destination, previous);
             File placed;
             if(kind.unpacksArchive()) {
-                placed = unpackWorld(staged, destination, worldNameFor(detail));
+                placed = unpackWorld(staged, destination, worldNameFor(detail.title));
                 index.record(kind, detail.apiSource, detail.id, placed.getName(),
                         detail.versionNames[selectedVersion]);
             }else {
@@ -207,8 +246,11 @@ public class ContentInstaller {
         return name;
     }
 
-    private static String worldNameFor(ModDetail detail) {
-        String raw = detail.title == null || detail.title.isEmpty() ? "world" : detail.title;
+    /**
+     * Turn any title into a folder name the saves list will show.
+     */
+    private static String worldNameFor(String title) {
+        String raw = title == null || title.isEmpty() ? "world" : title;
         String name = FileUtils.escapeFileName(raw);
         if(name.isEmpty()) name = "world";
         if(name.length() > 60) name = name.substring(0, 60);
@@ -217,8 +259,8 @@ public class ContentInstaller {
 
     /**
      * Unpack a world archive into the saves folder. World archives either hold the
-     * world at their root or wrap it in a single folder, so the root is looked up
-     * before anything is moved.
+     * world at their root or wrap it in a folder, so the root is looked up before
+     * anything is moved.
      */
     private static File unpackWorld(File archive, File savesDirectory, String worldName) throws IOException {
         File temporary = new File(Tools.DIR_CACHE, "world_" + System.nanoTime());
@@ -229,6 +271,8 @@ public class ContentInstaller {
                 ZipUtils.zipExtract(zipFile, "", temporary);
             }
             File worldRoot = findWorldRoot(temporary);
+            if(worldRoot == null)
+                throw new IOException("The archive does not hold a single world");
             File target = uniqueDirectory(savesDirectory, worldName);
             if(worldRoot.equals(temporary)) {
                 FileUtils.ensureDirectory(target);
@@ -252,12 +296,21 @@ public class ContentInstaller {
         }
     }
 
+    /**
+     * @return the folder holding level.dat, or null when the archive holds no world
+     *         or holds several of them
+     */
     private static File findWorldRoot(File unpacked) {
         if(new File(unpacked, "level.dat").isFile()) return unpacked;
         File[] children = unpacked.listFiles();
-        if(children != null && children.length == 1 && children[0].isDirectory()
-                && new File(children[0], "level.dat").isFile()) return children[0];
-        return unpacked;
+        if(children == null) return null;
+        File found = null;
+        for(File child : children) {
+            if(!child.isDirectory() || !new File(child, "level.dat").isFile()) continue;
+            if(found != null) return null;
+            found = child;
+        }
+        return found;
     }
 
     /**

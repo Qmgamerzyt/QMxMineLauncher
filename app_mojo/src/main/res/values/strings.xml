@@ -347,6 +347,7 @@
     <string name="content_install_success">Content installed</string>
     <string name="content_install_failed">Failed to install the selected content</string>
     <string name="content_install_no_instances">Create an instance first, there is nowhere to install the content yet.</string>
+    <string name="content_import_local_world">Import local world</string>
     <string name="main_content_manager">Browse content</string>
     <string name="content_tab_mods">Mods</string>
     <string name="content_tab_resource_packs">Resource Packs</string>
