@@ -19,6 +19,9 @@ public class ContentIndex {
     private static final String TAG = "ContentIndex";
     public static final String FILE_NAME = ".qmxmine_content.json";
 
+    /** Source used for content that came from the device rather than from a provider. */
+    public static final int SOURCE_LOCAL = 0;
+
     public List<Entry> entries = new ArrayList<>();
 
     public static class Entry {
@@ -26,6 +29,7 @@ public class ContentIndex {
         public int apiSource;
         public String projectId;
         public String fileName;
+        public String title;
         public String versionName;
     }
 
@@ -68,7 +72,12 @@ public class ContentIndex {
         return null;
     }
 
-    public void record(ContentKind kind, int apiSource, String projectId, String fileName, String versionName) {
+    /**
+     * Write down what this project placed into the instance, keeping the entry that
+     * already describes it so a repeat install stays a single row.
+     */
+    public void record(ContentKind kind, int apiSource, String projectId, String fileName,
+                       String title, String versionName) {
         Entry entry = find(kind, apiSource, projectId);
         if(entry == null) {
             entry = new Entry();
@@ -78,6 +87,7 @@ public class ContentIndex {
         entry.apiSource = apiSource;
         entry.projectId = projectId;
         entry.fileName = fileName;
+        entry.title = title;
         entry.versionName = versionName;
     }
 }

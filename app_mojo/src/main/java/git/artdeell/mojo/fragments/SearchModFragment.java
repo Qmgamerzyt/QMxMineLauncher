@@ -36,6 +36,7 @@ import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.modding.modpacks.ModItemAdapter;
 import git.artdeell.mojo.modding.modpacks.api.CommonApi;
 import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
+import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
@@ -197,6 +198,8 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         mImportButton.setOnClickListener(v -> {
             mImportLauncher.launch("*/*");
         });
+        view.findViewById(R.id.content_manage_button).setOnClickListener(v ->
+                InstalledContent.handleManage(requireContext().getApplicationContext()));
         mTaskCountListener = taskCount -> {
             runOnUiThread(() -> mImportButton.setEnabled(taskCount == 0));
             return false;

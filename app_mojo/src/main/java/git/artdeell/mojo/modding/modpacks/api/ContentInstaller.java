@@ -38,6 +38,13 @@ public class ContentInstaller {
     /**
      * The work that happens once an instance has been chosen.
      */
+    interface InstanceChosen {
+        void chosen(Instance instance);
+    }
+
+    /**
+     * The install itself, run after an instance was picked.
+     */
     private interface InstallAction {
         File run(Instance instance) throws IOException;
     }
@@ -56,8 +63,10 @@ public class ContentInstaller {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
                 Instance selected = Instances.loadSelectedInstance();
-                ContextExecutor.executeActivity(activity -> showInstancePicker(activity, instances, selected,
-                        instance -> install(instance, modDetail, selectedVersion)));
+                ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
+                        R.string.content_install_select_instance, R.string.generic_install,
+                        instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
+                                in -> install(in, modDetail, selectedVersion)))));
             }catch (IOException e) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
@@ -80,16 +89,10 @@ public class ContentInstaller {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
                 Instance selected = Instances.loadSelectedInstance();
-                ContextExecutor.executeActivity(activity -> showInstancePicker(activity, instances, selected,
-                        instance -> {
-                            try {
-                                File saves = new File(instance.getGameDirectory(), ContentKind.WORLD.folder);
-                                FileUtils.ensureDirectory(saves);
-                                return unpackWorld(archive, saves, worldName);
-                            }finally {
-                                archive.delete();
-                            }
-                        }));
+                ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
+                        R.string.content_install_select_instance, R.string.generic_install,
+                        instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
+                                in -> installLocalWorld(in, archive, worldName)))));
             }catch (IOException e) {
                 archive.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
@@ -98,12 +101,18 @@ public class ContentInstaller {
         });
     }
 
-    private static void showInstancePicker(Context context, List<Instance> instances, Instance selected,
-                                           InstallAction action) {
+    /**
+     * Show the list of instances and hand the one that was picked to the given work.
+     *
+     * @param titleRes heading of the picker
+     * @param buttonRes label of the confirming button
+     */
+    static void pickInstance(Context context, List<Instance> instances, Instance selected,
+                             int titleRes, int buttonRes, InstanceChosen chosen) {
         if(instances.isEmpty()) {
             ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
             Tools.showErrorRemote(context, R.string.content_install_no_instances,
-                    new IOException("There is no instance to install into"));
+                    new IOException("There is no instance to choose"));
             return;
         }
         String[] names = new String[instances.size()];
@@ -114,16 +123,15 @@ public class ContentInstaller {
             if(selected != null && selected.name != null && selected.name.equals(instance.name)) checked = i;
         }
         new AlertDialog.Builder(context)
-                .setTitle(R.string.content_install_select_instance)
+                .setTitle(titleRes)
                 .setSingleChoiceItems(names, checked, null)
-                .setPositiveButton(R.string.generic_install, (dialog, which) -> {
+                .setPositiveButton(buttonRes, (dialog, which) -> {
                     int position = ((AlertDialog) dialog).getListView().getCheckedItemPosition();
                     if(position < 0 || position >= instances.size()) {
                         ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                         return;
                     }
-                    Instance target = instances.get(position);
-                    MojoApplication.sExecutorService.execute(() -> installInto(context, target, action));
+                    chosen.chosen(instances.get(position));
                 })
                 .setNegativeButton(android.R.string.cancel, (dialog, which) ->
                         ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK))
@@ -189,18 +197,36 @@ public class ContentInstaller {
             File placed;
             if(kind.unpacksArchive()) {
                 placed = unpackWorld(staged, destination, worldNameFor(detail.title));
-                index.record(kind, detail.apiSource, detail.id, placed.getName(),
-                        detail.versionNames[selectedVersion]);
             }else {
                 placed = new File(destination, fileName);
                 org.apache.commons.io.FileUtils.moveFile(staged, placed);
-                index.record(kind, detail.apiSource, detail.id, fileName,
-                        detail.versionNames[selectedVersion]);
             }
+            index.record(kind, detail.apiSource, detail.id, placed.getName(), detail.title,
+                    detail.versionNames[selectedVersion]);
             index.write(gameDirectory);
             return placed;
         }finally {
             staged.delete();
+        }
+    }
+
+    /**
+     * Unpack a world archive the user picked from their own storage into the saves
+     * folder of an instance and write it down in that instance's index.
+     */
+    private static File installLocalWorld(Instance instance, File archive, String worldName) throws IOException {
+        try {
+            File gameDirectory = instance.getGameDirectory();
+            File saves = new File(gameDirectory, ContentKind.WORLD.folder);
+            FileUtils.ensureDirectory(saves);
+            File placed = unpackWorld(archive, saves, worldName);
+            ContentIndex index = ContentIndex.read(gameDirectory);
+            index.record(ContentKind.WORLD, ContentIndex.SOURCE_LOCAL, worldName,
+                    placed.getName(), worldName, null);
+            index.write(gameDirectory);
+            return placed;
+        }finally {
+            archive.delete();
         }
     }
 
