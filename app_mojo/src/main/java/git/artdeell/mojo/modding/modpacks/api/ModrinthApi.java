@@ -17,6 +17,7 @@ import git.artdeell.mojo.modding.modpacks.api.modloader.ForgelikeLoaderInstaller
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.api.modloader.Lwjgl3ifyLoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.modding.modpacks.models.ModrinthIndex;
@@ -82,21 +83,24 @@ public class ModrinthApi implements ModpackApi{
         JsonArray responseHits = response.getAsJsonArray("hits");
         if(responseHits == null) return null;
 
-        ModItem[] items = new ModItem[responseHits.size()];
+        ArrayList<ModItem> items = new ArrayList<>(responseHits.size());
         for(int i=0; i<responseHits.size(); ++i){
             JsonObject hit = responseHits.get(i).getAsJsonObject();
-            items[i] = new ModItem(
+            ContentKind hitKind = ContentKind.fromModrinthType(hit.get("project_type").getAsString());
+            // A hit from a neighbouring kind belongs in a different folder of the instance
+            if(hitKind != searchFilters.kind) continue;
+            items.add(new ModItem(
                     Constants.SOURCE_MODRINTH,
-                    searchFilters.kind,
+                    hitKind,
                     hit.get("project_id").getAsString(),
                     hit.get("title").getAsString(),
                     hit.get("description").getAsString(),
                     hit.get("icon_url").getAsString()
-            );
+            ));
         }
         if(modrinthSearchResult == null) modrinthSearchResult = new ModrinthSearchResult();
         modrinthSearchResult.previousOffset += responseHits.size();
-        modrinthSearchResult.results = items;
+        modrinthSearchResult.results = items.toArray(new ModItem[0]);
         modrinthSearchResult.totalResultCount = response.get("total_hits").getAsInt();
         return modrinthSearchResult;
     }

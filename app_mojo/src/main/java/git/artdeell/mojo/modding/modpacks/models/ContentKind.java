@@ -42,4 +42,15 @@ public enum ContentKind {
     public boolean installsIntoExistingInstance() {
         return folder != null;
     }
+
+    /**
+     * @return the kind a Modrinth project type stands for, null when there is no such kind
+     */
+    public static ContentKind fromModrinthType(String modrinthType) {
+        if(modrinthType == null) return null;
+        for(ContentKind kind : values()) {
+            if(modrinthType.equals(kind.modrinthType)) return kind;
+        }
+        return null;
+    }
 }
