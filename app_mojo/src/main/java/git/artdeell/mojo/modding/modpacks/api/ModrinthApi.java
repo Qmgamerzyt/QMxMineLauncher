@@ -43,6 +43,15 @@ public class ModrinthApi implements ModpackApi{
     public SearchResult searchMod(SearchFilters searchFilters, SearchResult previousPageResult) {
         ModrinthSearchResult modrinthSearchResult = (ModrinthSearchResult) previousPageResult;
 
+        // Modrinth does not host this kind of content, hand back an empty page for it
+        if(!searchFilters.kind.onModrinth()) {
+            ModrinthSearchResult emptyResult = new ModrinthSearchResult();
+            emptyResult.results = new ModItem[0];
+            emptyResult.totalResultCount = 0;
+            emptyResult.previousOffset = 0;
+            return emptyResult;
+        }
+
         // Fixes an issue where the offset being equal or greater than total_hits is ignored
         if (modrinthSearchResult != null && modrinthSearchResult.previousOffset >= modrinthSearchResult.totalResultCount) {
             ModrinthSearchResult emptyResult = new ModrinthSearchResult();
@@ -57,7 +66,7 @@ public class ModrinthApi implements ModpackApi{
         HashMap<String, Object> params = new HashMap<>();
         StringBuilder facetString = new StringBuilder();
         facetString.append("[");
-        facetString.append(String.format("[\"project_type:%s\"]", searchFilters.isModpack ? "modpack" : "mod"));
+        facetString.append(String.format("[\"project_type:%s\"]", searchFilters.kind.modrinthType));
         if(searchFilters.mcVersion != null && !searchFilters.mcVersion.isEmpty())
             facetString.append(String.format(",[\"versions:%s\"]", searchFilters.mcVersion));
         facetString.append("]");
@@ -78,7 +87,7 @@ public class ModrinthApi implements ModpackApi{
             JsonObject hit = responseHits.get(i).getAsJsonObject();
             items[i] = new ModItem(
                     Constants.SOURCE_MODRINTH,
-                    hit.get("project_type").getAsString().equals("modpack"),
+                    searchFilters.kind,
                     hit.get("project_id").getAsString(),
                     hit.get("title").getAsString(),
                     hit.get("description").getAsString(),

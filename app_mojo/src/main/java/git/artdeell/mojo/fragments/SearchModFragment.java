@@ -34,6 +34,7 @@ import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.modding.modpacks.ModItemAdapter;
 import git.artdeell.mojo.modding.modpacks.api.CommonApi;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
@@ -113,7 +114,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     public SearchModFragment(){
         super(R.layout.fragment_mod_search);
         mSearchFilters = new SearchFilters();
-        mSearchFilters.isModpack = true;
+        mSearchFilters.kind = ContentKind.MODPACK;
     }
 
     @Override

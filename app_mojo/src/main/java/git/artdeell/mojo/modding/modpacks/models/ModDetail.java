@@ -13,7 +13,7 @@ public class ModDetail extends ModItem {
     /* SHA 1 hashes, null if a hash is unavailable */
     public String[] versionHashes;
     public ModDetail(ModItem item, String[] versionNames, String[] mcVersionNames, String[] versionUrls, String[] hashes) {
-        super(item.apiSource, item.isModpack, item.id, item.title, item.description, item.imageUrl);
+        super(item.apiSource, item.kind, item.id, item.title, item.description, item.imageUrl);
         this.versionNames = versionNames;
         this.mcVersionNames = mcVersionNames;
         this.versionUrls = versionUrls;
@@ -38,7 +38,7 @@ public class ModDetail extends ModItem {
                 ", description='" + description + '\'' +
                 ", imageUrl='" + imageUrl + '\'' +
                 ", apiSource=" + apiSource +
-                ", isModpack=" + isModpack +
+                ", kind=" + kind +
                 '}';
     }
 }
