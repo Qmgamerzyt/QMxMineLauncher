@@ -32,6 +32,35 @@ Game launch logic, renderers, native code and JNI layers are untouched.
 4. **Version string** — prefix `justicia-` → `qmxmine-`.
 5. **CI** — `.github/workflows/android.yml` additionally publishes the debug APK as a
    GitHub Release asset so it can be downloaded without signing in.
+6. **Content manager** — the modpack search screen now carries a content kind, so the
+   same list searches and installs several sorts of game content next to modpacks:
+
+   | Kind | Modrinth | CurseForge | Installed into |
+   |---|---|---|---|
+   | Mods | `project_type:mod` | classId 6 | `<instance>/mods` |
+   | Resource packs | `project_type:resourcepack` | classId 12 | `<instance>/resourcepacks` |
+   | Shaders | `project_type:shader` | classId 6552 | `<instance>/shaderpacks` |
+   | Worlds | not hosted by Modrinth | classId 17 | `<instance>/saves` |
+   | Modpacks | `project_type:modpack` | classId 4471 | a new profile (unchanged) |
+
+   Added files are `ContentKind` (kind to provider id to folder), `ContentIndex` (a
+   record of what each project placed in an instance, so a later install replaces the
+   file it succeeded instead of leaving two copies in the same folder) and
+   `ContentInstaller` (instance picker, SHA-1 checked download, and world unpacking
+   that refuses an archive entry escaping the folder it is unpacked into).
+
+   The search screen gained a tab row for the five kinds and is reachable from a new
+   *Browse content* button on the main menu. A world can also be brought in from a
+   local `.zip` archive, which matters because Modrinth hosts no worlds at all.
+
+   A *Manage installed* button on the same screen lists what an instance already holds
+   and takes an entry away again, working from the same index so it only ever offers
+   files the launcher itself placed.
+
+Nothing outside `app_mojo` was taken from another launcher. The content manager was
+written against the public Modrinth and CurseForge API documentation and against the
+patterns already used in this codebase; no source file was copied from ZalithLauncher,
+so this fork stays under the LGPLv3 it inherited.
 
 ## Licence compliance when sharing this build
 
