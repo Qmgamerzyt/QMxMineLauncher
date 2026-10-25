@@ -28,6 +28,7 @@ import git.artdeell.mojo.extra.ExtraConstants;
 import git.artdeell.mojo.extra.ExtraCore;
 import git.artdeell.mojo.instances.Instance;
 import git.artdeell.mojo.instances.Instances;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.utils.FileUtils;
 
 import java.io.File;
@@ -54,6 +55,7 @@ public class MainMenuFragment extends Fragment {
         Button mInstallJarButton = view.findViewById(R.id.install_jar_button);
         Button mShareLogsButton = view.findViewById(R.id.share_logs_button);
         Button mOpenDirectoryButton = view.findViewById(R.id.open_files_button);
+        Button mContentManagerButton = view.findViewById(R.id.content_manager_button);
 
         ImageButton mEditProfileButton = view.findViewById(R.id.edit_profile_button);
         Button mPlayButton = view.findViewById(R.id.play_button);
@@ -70,6 +72,12 @@ public class MainMenuFragment extends Fragment {
         mShareLogsButton.setOnClickListener((v) -> shareLog(requireContext()));
 
         mOpenDirectoryButton.setOnClickListener((v)-> openGameDirectory(v.getContext()));
+
+        mContentManagerButton.setOnClickListener(v -> {
+            Bundle arguments = new Bundle();
+            arguments.putString(SearchModFragment.ARG_KIND, ContentKind.MOD.name());
+            Tools.swapFragment(requireActivity(), SearchModFragment.class, SearchModFragment.TAG, arguments);
+        });
 
 
         mNewsButton.setOnLongClickListener((v)->{

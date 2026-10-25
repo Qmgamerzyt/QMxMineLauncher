@@ -6,6 +6,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -20,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.core.math.MathUtils;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -71,7 +73,11 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     private ColorStateList mDefaultTextColor;
     private ModpackApi modpackApi;
 
+    /** Argument carrying the ContentKind this screen opens on. */
+    public static final String ARG_KIND = "kind";
+
     private final SearchFilters mSearchFilters;
+    private TextView[] mTabViews;
 
     private Button mImportButton;
     private TaskCountListener mTaskCountListener;
@@ -167,6 +173,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             return false;
         };
         ProgressKeeper.addTaskCountListener(mTaskCountListener);
+        applyKindArgument(view);
 
         searchMods(null);
     }
@@ -198,6 +205,77 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
                 mStatusTextView.setTextColor(mDefaultTextColor);
                 mStatusTextView.setText(R.string.search_modpack_no_result);
                 break;
+        }
+    }
+
+    /**
+     * Take the kind this screen was opened on from the fragment arguments, then bind
+     * every tab to the kind it stands for.
+     */
+    private void applyKindArgument(View view) {
+        Bundle arguments = getArguments();
+        if(arguments != null) {
+            String kindName = arguments.getString(ARG_KIND);
+            if(kindName != null) {
+                try {
+                    mSearchFilters.kind = ContentKind.valueOf(kindName);
+                }catch (IllegalArgumentException ignored) {
+                    // A kind that no longer exists leaves the default one in place
+                }
+            }
+        }
+        mTabViews = new TextView[] {
+                bindTab(view, R.id.search_tab_mod, ContentKind.MOD),
+                bindTab(view, R.id.search_tab_resource_pack, ContentKind.RESOURCE_PACK),
+                bindTab(view, R.id.search_tab_shader, ContentKind.SHADER),
+                bindTab(view, R.id.search_tab_world, ContentKind.WORLD),
+                bindTab(view, R.id.search_tab_modpack, ContentKind.MODPACK)
+        };
+        refreshTabs();
+        updateImportButton();
+    }
+
+    private TextView bindTab(View view, int viewId, ContentKind kind) {
+        TextView tab = view.findViewById(viewId);
+        tab.setTag(kind);
+        tab.setOnClickListener(this::onTabClicked);
+        return tab;
+    }
+
+    private void onTabClicked(View view) {
+        ContentKind kind = (ContentKind) view.getTag();
+        if(kind == null || kind == mSearchFilters.kind) return;
+        mSearchFilters.kind = kind;
+        refreshTabs();
+        updateImportButton();
+        searchMods(mSearchEditText.getText().toString());
+    }
+
+    private void refreshTabs() {
+        if(mTabViews == null) return;
+        Context context = getContext();
+        if(context == null) return;
+        int selectedColor = ContextCompat.getColor(context, R.color.minebutton_color);
+        int idleColor = ContextCompat.getColor(context, R.color.secondary_text);
+        for(TextView tab : mTabViews) {
+            ContentKind kind = (ContentKind) tab.getTag();
+            boolean selected = kind == mSearchFilters.kind;
+            tab.setTextColor(selected ? selectedColor : idleColor);
+            tab.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+        }
+    }
+
+    /**
+     * The local file picker unpacks a modpack into a profile it creates itself, so it
+     * belongs on the modpack tab and nowhere else.
+     */
+    private void updateImportButton() {
+        if(mImportButton == null) return;
+        if(mSearchFilters.kind == ContentKind.MODPACK) {
+            mImportButton.setText(R.string.import_local_modpack);
+            mImportButton.setVisibility(View.VISIBLE);
+        }else {
+            mImportButton.setVisibility(View.GONE);
         }
     }
 

@@ -28,6 +28,85 @@
 
 
         >
+
+        <!-- Content kind tabs -->
+        <HorizontalScrollView
+            android:id="@+id/search_mod_tabs_scroll"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <LinearLayout
+                android:id="@+id/search_mod_tabs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/search_tab_mod"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="@dimen/padding_medium"
+                    android:text="@string/content_tab_mods"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="@dimen/_13ssp" />
+
+                <TextView
+                    android:id="@+id/search_tab_resource_pack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="@dimen/padding_medium"
+                    android:text="@string/content_tab_resource_packs"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="@dimen/_13ssp" />
+
+                <TextView
+                    android:id="@+id/search_tab_shader"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="@dimen/padding_medium"
+                    android:text="@string/content_tab_shaders"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="@dimen/_13ssp" />
+
+                <TextView
+                    android:id="@+id/search_tab_world"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="@dimen/padding_medium"
+                    android:text="@string/content_tab_worlds"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="@dimen/_13ssp" />
+
+                <TextView
+                    android:id="@+id/search_tab_modpack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="@dimen/padding_medium"
+                    android:text="@string/content_tab_modpacks"
+                    android:textColor="@color/secondary_text"
+                    android:textSize="@dimen/_13ssp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
         <!-- Search text -->
         <EditText
             android:id="@+id/search_mod_edittext"
@@ -41,7 +120,7 @@
             android:hint="@string/hint_search_modpack"
             android:inputType="textPersonName"
             android:paddingHorizontal="@dimen/padding_heavy"
-            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/search_mod_tabs_scroll"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/search_mod_filter"
             />
