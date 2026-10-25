@@ -23,10 +23,12 @@ import com.kdt.SimpleArrayAdapter;
 import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
+import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
 import git.artdeell.mojo.modding.modpacks.imagecache.ImageReceiver;
 import git.artdeell.mojo.modding.modpacks.imagecache.ModIconCache;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
@@ -176,10 +178,16 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     mExtendedSpinner = mExtendedLayout.findViewById(R.id.mod_extended_version_spinner);
                     mExtendedErrorTextView = mExtendedLayout.findViewById(R.id.mod_extended_error_textview);
 
-                    mExtendedButton.setOnClickListener(v1 -> mModpackApi.handleModpackInstallation(
-                            mExtendedButton.getContext().getApplicationContext(),
-                            mModDetail,
-                            mExtendedSpinner.getSelectedItemPosition()));
+                    mExtendedButton.setOnClickListener(v1 -> {
+                        int position = mExtendedSpinner.getSelectedItemPosition();
+                        if(mModDetail.kind == ContentKind.MODPACK) {
+                            mModpackApi.handleModpackInstallation(
+                                    v1.getContext().getApplicationContext(), mModDetail, position);
+                        }else {
+                            ContentInstaller.handleContentInstallation(
+                                    v1.getContext().getApplicationContext(), mModDetail, position);
+                        }
+                    });
                     mExtendedSpinner.setAdapter(mLoadingAdapter);
                 } else {
                     if(isExtended()) closeDetailedView();
