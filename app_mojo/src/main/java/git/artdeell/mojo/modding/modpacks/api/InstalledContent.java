@@ -27,6 +27,22 @@ import java.util.List;
 public class InstalledContent {
 
     /**
+     * Show what an instance already holds, without asking which instance to look at.
+     * The editor knows the instance it is editing, so the picker is skipped.
+     *
+     * @param kind only offer content of this kind, or every kind when it is null
+     */
+    public static void showListFor(Context context, Instance instance, ContentKind kind) {
+        MojoApplication.sExecutorService.execute(() -> {
+            try {
+                ContextExecutor.executeActivity(activity -> showList(activity, instance, kind));
+            }catch (RuntimeException e) {
+                Tools.showErrorRemote(context, R.string.content_install_failed, e);
+            }
+        });
+    }
+
+    /**
      * Ask which instance to look at, then show what that instance holds.
      *
      * @param context used to report errors
@@ -39,24 +55,31 @@ public class InstalledContent {
                 ContextExecutor.executeActivity(activity -> ContentInstaller.pickInstance(
                         activity, instances, selected,
                         R.string.content_manage_pick_instance, android.R.string.ok,
-                        instance -> showList(activity, instance)));
+                        instance -> showList(activity, instance, null)));
             }catch (IOException e) {
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
             }
         });
     }
 
-    private static void showList(Context context, Instance instance) {
+    private static void showList(Context context, Instance instance, ContentKind kind) {
         File gameDirectory = instance.getGameDirectory();
         ContentIndex index = ContentIndex.read(gameDirectory);
         List<ContentIndex.Entry> present = new ArrayList<>();
         for(ContentIndex.Entry entry : index.entries) {
+            if(kind != null && kindOf(entry) != kind) continue;
             File placed = locationOf(gameDirectory, entry);
             if(placed != null && placed.exists()) present.add(entry);
         }
         if(present.isEmpty()) {
-            Tools.showErrorRemote(context, R.string.content_manage_none,
-                    new IOException("There is nothing installed in " + instance.name));
+            if(kind == null) {
+                Tools.showErrorRemote(context, R.string.content_manage_none,
+                        new IOException("There is nothing installed in " + instance.name));
+            }else {
+                Tools.showErrorRemote(context.getString(R.string.content_manage_kind_empty,
+                        context.getString(kind.labelRes)),
+                        new IOException("No " + kind + " is installed in " + instance.name));
+            }
             return;
         }
         String[] names = new String[present.size()];
@@ -66,25 +89,25 @@ public class InstalledContent {
         new AlertDialog.Builder(context)
                 .setTitle(R.string.content_manage_title)
                 .setItems(names, (dialog, which) ->
-                        confirmRemoval(context, instance, index, present.get(which)))
+                        confirmRemoval(context, instance, index, present.get(which), kind))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
     private static void confirmRemoval(Context context, Instance instance, ContentIndex index,
-                                       ContentIndex.Entry entry) {
+                                       ContentIndex.Entry entry, ContentKind kind) {
         String name = describe(context, entry);
         new AlertDialog.Builder(context)
                 .setMessage(context.getString(R.string.content_manage_delete, name))
                 .setPositiveButton(R.string.content_manage_remove, (dialog, which) ->
                         MojoApplication.sExecutorService.execute(() ->
-                                remove(context, instance, index, entry)))
+                                remove(context, instance, index, entry, kind)))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
     private static void remove(Context context, Instance instance, ContentIndex index,
-                               ContentIndex.Entry entry) {
+                               ContentIndex.Entry entry, ContentKind kind) {
         File gameDirectory = instance.getGameDirectory();
         String name = describe(context, entry);
         try {
@@ -98,7 +121,7 @@ public class InstalledContent {
         ContextExecutor.executeActivity(activity -> {
             Toast.makeText(activity, activity.getString(R.string.content_manage_removed, name),
                     Toast.LENGTH_SHORT).show();
-            showList(activity, instance);
+            showList(activity, instance, kind);
         });
     }
 

@@ -361,6 +361,10 @@
     <string name="content_tab_shaders">Shaders</string>
     <string name="content_tab_worlds">Worlds</string>
     <string name="content_tab_modpacks">Modpacks</string>
+    <string name="content_section_label">Content</string>
+    <string name="content_row_manage">Manage</string>
+    <string name="content_row_browse">Browse</string>
+    <string name="content_manage_kind_empty">This instance has no %1$s installed yet.</string>
 
     <string name="modpack_download_downloading_metadata">Downloading modpack metadata (%.2f MB / %.2f MB)</string>
     <string name="modpack_download_downloading_mods">Downloading mods (%.2f MB / %.2f MB)</string>

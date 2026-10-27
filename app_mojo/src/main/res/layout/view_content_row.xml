@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingVertical="@dimen/padding_small">
+
+    <TextView
+        android:id="@+id/content_row_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/primary_text"
+        android:textSize="@dimen/_13ssp" />
+
+    <Button
+        android:id="@+id/content_row_manage"
+        style="@style/MojoLauncher.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/padding_small"
+        android:minHeight="0dp"
+        android:minWidth="0dp"
+        android:paddingHorizontal="@dimen/padding_medium"
+        android:text="@string/content_row_manage"
+        android:textColor="@color/minebutton_color"
+        android:textSize="@dimen/_12ssp" />
+
+    <Button
+        android:id="@+id/content_row_browse"
+        style="@style/MojoLauncher.Button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/padding_small"
+        android:minHeight="0dp"
+        android:minWidth="0dp"
+        android:paddingHorizontal="@dimen/padding_medium"
+        android:text="@string/content_row_browse"
+        android:textColor="@color/minebutton_color"
+        android:textSize="@dimen/_12ssp" />
+
+</LinearLayout>

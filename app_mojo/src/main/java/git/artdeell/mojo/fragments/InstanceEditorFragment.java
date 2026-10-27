@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -32,6 +33,8 @@ import git.artdeell.mojo.multirt.MultiRTUtils;
 import git.artdeell.mojo.multirt.RTSpinnerAdapter;
 import git.artdeell.mojo.multirt.Runtime;
 import git.artdeell.mojo.instances.InstanceIconProvider;
+import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.utils.CropperUtils;
 
@@ -50,6 +53,7 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
     private EditText mDefaultName, mDefaultJvmArgument;
     private TextView mDefaultVersion, mDefaultControl;
     private ImageView mInstanceIcon;
+    private LinearLayout mContentRows;
     private CheckBox mSharedDataCheckbox;
     private int mRecommendedIconSize;
     private final ActivityResultLauncher<?> mCropperLauncher = CropperUtils.registerCropper(this, this);
@@ -175,6 +179,35 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
         mDefaultName.setText(nullToEmpty(instance.name));
         mDefaultControl.setText(mSelectedControlLayout == null ? nullToEmpty(instance.controlLayout) : mSelectedControlLayout);
         mSharedDataCheckbox.setChecked(instance.sharedData);
+        buildContentRows(instance);
+    }
+
+    /**
+     * One row per kind of content an instance can hold, offering a look at what is
+     * already inside it and a way to go and fetch more. Kinds that create their own
+     * profile instead of landing in an instance are left out.
+     */
+    private void buildContentRows(@NonNull Instance instance) {
+        if(mContentRows == null) return;
+        mContentRows.removeAllViews();
+        for(ContentKind kind : ContentKind.values()) {
+            if(!kind.installsIntoExistingInstance()) continue;
+            View row = getLayoutInflater().inflate(R.layout.view_content_row, mContentRows, false);
+            TextView label = row.findViewById(R.id.content_row_label);
+            Button manage = row.findViewById(R.id.content_row_manage);
+            Button browse = row.findViewById(R.id.content_row_browse);
+            label.setText(kind.labelRes);
+            manage.setOnClickListener(v ->
+                    InstalledContent.showListFor(requireContext().getApplicationContext(), instance, kind));
+            browse.setOnClickListener(v -> {
+                Bundle bundle = new Bundle(2);
+                bundle.putString(SearchModFragment.ARG_KIND, kind.name());
+                bundle.putString(SearchModFragment.ARG_MC_VERSION, instance.versionId);
+                Tools.swapFragment(requireActivity(), SearchModFragment.class,
+                        SearchModFragment.TAG, bundle);
+            });
+            mContentRows.addView(row);
+        }
     }
 
     private void bindViews(@NonNull View view){
@@ -191,6 +224,7 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
         mControlSelectButton = view.findViewById(R.id.vprof_editor_ctrl_button);
         mVersionSelectButton = view.findViewById(R.id.vprof_editor_version_button);
         mInstanceIcon = view.findViewById(R.id.vprof_editor_instance_icon);
+        mContentRows = view.findViewById(R.id.vprof_editor_content_rows);
         mSharedDataCheckbox = view.findViewById(R.id.vprof_editor_data_checkbox_container);
     }
 
