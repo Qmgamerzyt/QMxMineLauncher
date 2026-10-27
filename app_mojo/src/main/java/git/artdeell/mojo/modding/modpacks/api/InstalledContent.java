@@ -173,7 +173,7 @@ public class InstalledContent {
             ContentPlacement.setEnabled(instance.getGameDirectory(), kindOf(entry),
                     entry.fileName, enabled);
         }catch (IOException e) {
-            Tools.showErrorRemote(context,
+            Tools.showErrorRemote(
                     context.getString(R.string.content_manage_failed, name), e);
             return;
         }
@@ -210,7 +210,7 @@ public class InstalledContent {
             entries.remove(entry);
             index.write(instance.getGameDirectory());
         }catch (IOException e) {
-            Tools.showErrorRemote(context,
+            Tools.showErrorRemote(
                     context.getString(R.string.content_manage_failed, name), e);
             return;
         }
