@@ -354,6 +354,8 @@
     <string name="content_manage_none">Nothing is installed in this instance yet.</string>
     <string name="content_manage_delete">Remove %1$s from this instance?</string>
     <string name="content_manage_removed">Removed %1$s</string>
+    <string name="content_manage_enabled">Enabled %1$s</string>
+    <string name="content_manage_disabled">Disabled %1$s</string>
     <string name="content_manage_remove">Remove</string>
     <string name="main_content_manager">Browse content</string>
     <string name="content_tab_mods">Mods</string>

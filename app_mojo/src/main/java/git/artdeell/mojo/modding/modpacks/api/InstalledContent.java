@@ -1,6 +1,12 @@
 package git.artdeell.mojo.modding.modpacks.api;
 
 import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -12,17 +18,20 @@ import git.artdeell.mojo.instances.Instance;
 import git.artdeell.mojo.instances.Instances;
 import git.artdeell.mojo.modding.modpacks.models.ContentIndex;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
+import git.artdeell.mojo.modding.modpacks.models.ContentPlacement;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 /**
- * Shows what an instance already holds and takes it away again. The list comes from
- * the index the installer keeps, so it only ever offers files that the launcher
- * itself placed.
+ * Shows what an instance already holds, lets each piece of it be turned off and on
+ * without losing it, and takes it away when that is asked for. The list brings the
+ * rows the installer wrote down together with whatever sits in the folders the game
+ * reads, so files placed there by hand are offered as well.
  */
 public class InstalledContent {
 
@@ -65,13 +74,8 @@ public class InstalledContent {
     private static void showList(Context context, Instance instance, ContentKind kind) {
         File gameDirectory = instance.getGameDirectory();
         ContentIndex index = ContentIndex.read(gameDirectory);
-        List<ContentIndex.Entry> present = new ArrayList<>();
-        for(ContentIndex.Entry entry : index.entries) {
-            if(kind != null && kindOf(entry) != kind) continue;
-            File placed = locationOf(gameDirectory, entry);
-            if(placed != null && placed.exists()) present.add(entry);
-        }
-        if(present.isEmpty()) {
+        List<ContentIndex.Entry> entries = collect(gameDirectory, index, kind);
+        if(entries.isEmpty()) {
             if(kind == null) {
                 Tools.showErrorRemote(context, R.string.content_manage_none,
                         new IOException("There is nothing installed in " + instance.name));
@@ -82,40 +86,130 @@ public class InstalledContent {
             }
             return;
         }
-        String[] names = new String[present.size()];
-        for(int i = 0; i < present.size(); i++) {
-            names[i] = describe(context, present.get(i));
+        showRows(context, instance, index, entries, kind);
+    }
+
+    /**
+     * What the instance holds of one kind, or of every kind when none is asked for.
+     * The rows the installer wrote down are listed first, then whatever else sits in
+     * the folders the game reads, which covers files placed there by hand.
+     */
+    private static List<ContentIndex.Entry> collect(File gameDirectory, ContentIndex index, ContentKind filter) {
+        ArrayList<ContentIndex.Entry> entries = new ArrayList<>();
+        HashSet<String> listed = new HashSet<>();
+        for(ContentIndex.Entry entry : index.entries) {
+            ContentKind kind = kindOf(entry);
+            if(kind == null || kind.folder == null) continue;
+            if(filter != null && kind != filter) continue;
+            if(ContentPlacement.present(gameDirectory, kind, entry.fileName) == null) continue;
+            entries.add(entry);
+            listed.add(keyOf(kind, entry.fileName));
         }
+        for(ContentKind kind : ContentKind.values()) {
+            if(kind.folder == null || (filter != null && kind != filter)) continue;
+            for(String name : ContentPlacement.names(gameDirectory, kind)) {
+                if(!listed.add(keyOf(kind, name))) continue;
+                ContentIndex.Entry entry = new ContentIndex.Entry();
+                entry.kind = kind.name();
+                entry.apiSource = ContentIndex.SOURCE_LOCAL;
+                entry.fileName = name;
+                entry.title = name;
+                entries.add(entry);
+            }
+        }
+        return entries;
+    }
+
+    /** One name of a kind standing for the content it belongs to. */
+    private static String keyOf(ContentKind kind, String name) {
+        return kind.name() + "/" + name;
+    }
+
+    /** Rows of content, each carrying whether the game may see it and a way to drop it. */
+    private static void showRows(Context context, Instance instance, ContentIndex index,
+                                 List<ContentIndex.Entry> entries, ContentKind kind) {
+        ScrollView scroll = new ScrollView(context);
+        LinearLayout rows = new LinearLayout(context);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        rows.setPadding(context.getResources().getDimensionPixelSize(R.dimen.padding_heavy),
+                0, 0, 0);
+        for(ContentIndex.Entry entry : entries) {
+            rows.addView(buildRow(context, instance, index, rows, entries, entry, kind));
+        }
+        scroll.addView(rows);
         new AlertDialog.Builder(context)
                 .setTitle(R.string.content_manage_title)
-                .setItems(names, (dialog, which) ->
-                        confirmRemoval(context, instance, index, present.get(which), kind))
+                .setView(scroll)
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
+    private static View buildRow(Context context, Instance instance, ContentIndex index,
+                                 LinearLayout rows, List<ContentIndex.Entry> entries,
+                                 ContentIndex.Entry entry, ContentKind kind) {
+        File gameDirectory = instance.getGameDirectory();
+        ContentKind entryKind = kindOf(entry);
+        View row = LayoutInflater.from(context).inflate(R.layout.view_content_toggle_row, rows, false);
+        CheckBox check = row.findViewById(R.id.content_toggle_check);
+        Button remove = row.findViewById(R.id.content_toggle_remove);
+        check.setText(describe(context, entry));
+        check.setChecked(ContentPlacement.isEnabled(gameDirectory, entryKind, entry.fileName));
+        // The listener is set after the state is put in place, so a row being built
+        // never asks for the content to move
+        check.setOnCheckedChangeListener((button, isChecked) ->
+                MojoApplication.sExecutorService.execute(() ->
+                        setEnabled(context, instance, entries, entry, kind, isChecked)));
+        remove.setOnClickListener(v ->
+                confirmRemoval(context, instance, index, entries, entry, kind));
+        return row;
+    }
+
+    /** Move one piece of content between the two places, then show the list again. */
+    private static void setEnabled(Context context, Instance instance,
+                                   List<ContentIndex.Entry> entries, ContentIndex.Entry entry,
+                                   ContentKind kind, boolean enabled) {
+        String name = describe(context, entry);
+        try {
+            ContentPlacement.setEnabled(instance.getGameDirectory(), kindOf(entry),
+                    entry.fileName, enabled);
+        }catch (IOException e) {
+            Tools.showErrorRemote(context, e);
+            return;
+        }
+        ContextExecutor.executeActivity(activity -> {
+            Toast.makeText(activity, activity.getString(enabled
+                            ? R.string.content_manage_enabled : R.string.content_manage_disabled, name),
+                    Toast.LENGTH_SHORT).show();
+            showList(activity, instance, kind);
+        });
+    }
+
     private static void confirmRemoval(Context context, Instance instance, ContentIndex index,
-                                       ContentIndex.Entry entry, ContentKind kind) {
+                                       List<ContentIndex.Entry> entries, ContentIndex.Entry entry,
+                                       ContentKind kind) {
         String name = describe(context, entry);
         new AlertDialog.Builder(context)
                 .setMessage(context.getString(R.string.content_manage_delete, name))
                 .setPositiveButton(R.string.content_manage_remove, (dialog, which) ->
                         MojoApplication.sExecutorService.execute(() ->
-                                remove(context, instance, index, entry, kind)))
+                                remove(context, instance, index, entries, entry, kind)))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
     private static void remove(Context context, Instance instance, ContentIndex index,
-                               ContentIndex.Entry entry, ContentKind kind) {
-        File gameDirectory = instance.getGameDirectory();
+                               List<ContentIndex.Entry> entries, ContentIndex.Entry entry,
+                               ContentKind kind) {
         String name = describe(context, entry);
         try {
-            deletePlaced(gameDirectory, entry);
+            ContentPlacement.delete(instance.getGameDirectory(), kindOf(entry), entry.fileName);
+            // The row goes even when the launcher never wrote it down, since the file
+            // it stood for is gone either way
             index.entries.remove(entry);
-            index.write(gameDirectory);
+            entries.remove(entry);
+            index.write(instance.getGameDirectory());
         }catch (IOException e) {
-            Tools.showErrorRemote(context, R.string.content_install_failed, e);
+            Tools.showErrorRemote(context, e);
             return;
         }
         ContextExecutor.executeActivity(activity -> {
@@ -123,37 +217,6 @@ public class InstalledContent {
                     Toast.LENGTH_SHORT).show();
             showList(activity, instance, kind);
         });
-    }
-
-    /**
-     * Work out where the entry sits inside the instance. A null result means the entry
-     * points at nothing this launcher knows how to reach.
-     */
-    private static File locationOf(File gameDirectory, ContentIndex.Entry entry) {
-        if(entry.fileName == null || entry.fileName.isEmpty()) return null;
-        ContentKind kind = kindOf(entry);
-        if(kind == null || kind.folder == null) return null;
-        return new File(new File(gameDirectory, kind.folder), entry.fileName);
-    }
-
-    /**
-     * Delete the file or folder the entry describes, refusing to step outside of the
-     * folder the kind belongs to.
-     */
-    private static void deletePlaced(File gameDirectory, ContentIndex.Entry entry) throws IOException {
-        ContentKind kind = kindOf(entry);
-        if(kind == null || kind.folder == null) return;
-        if(entry.fileName == null || entry.fileName.isEmpty()) return;
-        File destination = new File(gameDirectory, kind.folder);
-        File target = new File(destination, entry.fileName);
-        String root = destination.getCanonicalPath() + File.separator;
-        if(!target.getCanonicalPath().startsWith(root))
-            throw new IOException("Refusing to remove a path outside of " + kind.folder);
-        if(target.isFile()) {
-            target.delete();
-        }else if(target.isDirectory()) {
-            org.apache.commons.io.FileUtils.deleteDirectory(target);
-        }
     }
 
     private static ContentKind kindOf(ContentIndex.Entry entry) {

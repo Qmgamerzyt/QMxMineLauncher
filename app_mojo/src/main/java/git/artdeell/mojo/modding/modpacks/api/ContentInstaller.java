@@ -14,6 +14,7 @@ import git.artdeell.mojo.instances.Instance;
 import git.artdeell.mojo.instances.Instances;
 import git.artdeell.mojo.modding.modpacks.models.ContentIndex;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
+import git.artdeell.mojo.modding.modpacks.models.ContentPlacement;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.progresskeeper.DownloaderProgressWrapper;
 import git.artdeell.mojo.utils.DownloadUtils;
@@ -193,7 +194,7 @@ public class ContentInstaller {
         }
 
         try {
-            removeReplaced(destination, previous);
+            removeReplaced(gameDirectory, kind, previous);
             File placed;
             if(kind.unpacksArchive()) {
                 placed = unpackWorld(staged, destination, worldNameFor(detail.title));
@@ -231,16 +232,13 @@ public class ContentInstaller {
     }
 
     /**
-     * Drop whatever this project had placed into the instance before.
+     * Drop whatever this project had placed into the instance before, be it the file
+     * the game reads or a copy that had been turned off.
      */
-    private static void removeReplaced(File destination, ContentIndex.Entry previous) throws IOException {
+    private static void removeReplaced(File gameDirectory, ContentKind kind,
+                                       ContentIndex.Entry previous) throws IOException {
         if(previous == null || previous.fileName == null) return;
-        File replaced = new File(destination, previous.fileName);
-        if(replaced.isFile()) {
-            replaced.delete();
-        }else if(replaced.isDirectory()) {
-            org.apache.commons.io.FileUtils.deleteDirectory(replaced);
-        }
+        ContentPlacement.delete(gameDirectory, kind, previous.fileName);
     }
 
     /**
