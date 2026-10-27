@@ -62,6 +62,19 @@ public class ContentIndex {
     /**
      * @return the entry that recorded this project, or null if it was never installed
      */
+    /**
+     * The row describing this project, whatever kind of content it landed as. Used to
+     * leave a project alone that the instance already holds.
+     */
+    public Entry find(int apiSource, String projectId) {
+        if(projectId == null) return null;
+        for(Entry entry : entries) {
+            if(entry.apiSource != apiSource) continue;
+            if(projectId.equals(entry.projectId)) return entry;
+        }
+        return null;
+    }
+
     public Entry find(ContentKind kind, int apiSource, String projectId) {
         if(projectId == null) return null;
         for(Entry entry : entries) {

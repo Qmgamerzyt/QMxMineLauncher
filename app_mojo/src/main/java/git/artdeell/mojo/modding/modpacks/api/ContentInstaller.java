@@ -25,8 +25,11 @@ import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 import java.io.File;
 import java.io.IOException;
 import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -51,15 +54,21 @@ public class ContentInstaller {
     }
 
     /**
-     * Ask the user which instance should receive the content, then download it there.
-     * The listing and the download happen away from the UI thread.
+     * Ask the player which instance should receive the content, then download it
+     * there along with the projects the chosen version leans on.
      *
-     * @param context used to report errors
-     * @param modDetail the content that was picked
-     * @param selectedVersion index of the chosen version in the detail's version list
+     * @param context          used to report errors
+     * @param api              the providers, used to open each dependency
+     * @param modDetail        the content that was picked
+     * @param selectedVersion  index of the chosen version in the detail's version list
+     * @param titles           the titles found while the dependency list was offered
+     * @param approvedOptional keys of the optional dependencies that should come along
      */
-    public static void handleContentInstallation(Context context, ModDetail modDetail, int selectedVersion) {
+    public static void handleContentInstallation(Context context, ModpackApi api, ModDetail modDetail,
+                                                 int selectedVersion, Map<String, String> titles,
+                                                 Set<String> approvedOptional) {
         ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.global_waiting);
+        ArrayList<String> missed = new ArrayList<>();
         MojoApplication.sExecutorService.execute(() -> {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
@@ -67,7 +76,12 @@ public class ContentInstaller {
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
                         instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
-                                in -> install(in, modDetail, selectedVersion)))));
+                                in -> {
+                                    install(in, modDetail, selectedVersion);
+                                    missed.addAll(DependencyResolver.installAll(context, api, in,
+                                            modDetail, selectedVersion, titles, approvedOptional));
+                                    return null;
+                                }, missed))));
             }catch (IOException e) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
@@ -93,7 +107,7 @@ public class ContentInstaller {
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
                         instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
-                                in -> installLocalWorld(in, archive, worldName)))));
+                                in -> installLocalWorld(in, archive, worldName), null))));
             }catch (IOException e) {
                 archive.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
@@ -140,16 +154,43 @@ public class ContentInstaller {
                 .show();
     }
 
-    private static void installInto(Context context, Instance instance, InstallAction action) {
+    /**
+     * Run the install, then say how it went. An install that brought dependencies
+     * along reports what did not make it as one list, standing in for the note that
+     * everything went in.
+     *
+     * @param missed filled by the action with what did not make it, null when the
+     *               install does not look for dependencies
+     */
+    private static void installInto(Context context, Instance instance, InstallAction action,
+                                    List<String> missed) {
         try {
             action.run(instance);
-            ContextExecutor.executeActivity(activity ->
-                    Toast.makeText(activity, R.string.content_install_success, Toast.LENGTH_SHORT).show());
+            if(missed != null && !missed.isEmpty()) {
+                showMissed(context, missed);
+            }else {
+                ContextExecutor.executeActivity(activity ->
+                        Toast.makeText(activity, R.string.content_install_success, Toast.LENGTH_SHORT).show());
+            }
         }catch (IOException e) {
             Tools.showErrorRemote(context, R.string.content_install_failed, e);
         }finally {
             ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
         }
+    }
+
+    /** One report of every dependency that did not make it into the instance. */
+    private static void showMissed(Context context, List<String> missed) {
+        StringBuilder message = new StringBuilder(
+                context.getString(R.string.content_dependencies_report));
+        for(String name : missed) {
+            message.append("\n- ").append(name);
+        }
+        ContextExecutor.executeActivity(activity -> new AlertDialog.Builder(activity)
+                .setTitle(R.string.content_dependencies_report_title)
+                .setMessage(message.toString())
+                .setPositiveButton(android.R.string.ok, null)
+                .show());
     }
 
     /**

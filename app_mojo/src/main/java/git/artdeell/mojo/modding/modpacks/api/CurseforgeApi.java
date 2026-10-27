@@ -20,6 +20,7 @@ import git.artdeell.mojo.modding.modpacks.api.modloader.FabriclikeLoaderInstalle
 import git.artdeell.mojo.modding.modpacks.api.modloader.ForgelikeLoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentDependency;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.CurseManifest;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
@@ -40,7 +41,9 @@ import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
@@ -53,6 +56,12 @@ public class CurseforgeApi implements ModpackApi{
     private static final int CURSEFORGE_PAGINATION_SIZE = 50;
     private static final int CURSEFORGE_PAGINATION_END_REACHED = -1;
     private static final int CURSEFORGE_PAGINATION_ERROR = -2;
+    /** How many projects one call may name, the host caps what a body carries. */
+    private static final int TITLE_BATCH_SIZE = 50;
+    /** CurseForge's mark for a file that will not run without the project. */
+    private static final int CURSEFORGE_RELATION_REQUIRED = 3;
+    /** CurseForge's mark for a file that runs better with the project, but alone too. */
+    private static final int CURSEFORGE_RELATION_OPTIONAL = 2;
 
     private final ApiHandler mApiHandler;
     public CurseforgeApi(String apiKey) {
@@ -169,6 +178,7 @@ public class CurseforgeApi implements ModpackApi{
         String[] loaderNames = new String[length];
         String[] versionUrls = new String[length];
         String[] hashes = new String[length];
+        ContentDependency[][] dependencies = new ContentDependency[length][];
         for(int i = 0; i < allModDetails.size(); i++) {
             JsonObject modDetail = allModDetails.get(i);
             String displayName = GsonJsonUtils.getStringSafe(modDetail, "displayName");
@@ -198,8 +208,68 @@ public class CurseforgeApi implements ModpackApi{
                     GsonJsonUtils.getIntSafe(modDetail, "modLoader", 0)).name();
 
             hashes[i] = getSha1FromModData(modDetail);
+            dependencies[i] = readDependencies(modDetail);
         }
-        return new ModDetail(item, versionNames, mcVersionNames, loaderNames, versionUrls, hashes);
+        return new ModDetail(item, versionNames, mcVersionNames, loaderNames, versionUrls,
+                hashes, dependencies);
+    }
+
+    @Override
+    public Map<String, String> fetchTitles(int apiSource, List<String> projectIds) {
+        Map<String, String> titles = new LinkedHashMap<>();
+        if(projectIds == null || projectIds.isEmpty()) return titles;
+        for(int start = 0; start < projectIds.size(); start += TITLE_BATCH_SIZE) {
+            List<String> batch = projectIds.subList(start,
+                    Math.min(start + TITLE_BATCH_SIZE, projectIds.size()));
+            JsonArray modIds = new JsonArray();
+            for(String projectId : batch) {
+                try {
+                    modIds.add(Long.parseLong(projectId));
+                } catch (NumberFormatException e) {
+                    // An id the host does not write as a number is not one of its projects
+                }
+            }
+            if(modIds.size() == 0) continue;
+            JsonObject body = new JsonObject();
+            body.add("modIds", modIds);
+            JsonObject response = mApiHandler.post("mods", body, JsonObject.class);
+            if(response == null) continue;
+            JsonArray data = GsonJsonUtils.getJsonArraySafe(response, "data");
+            if(data == null) continue;
+            for(JsonElement element : data) {
+                if(element == null || !element.isJsonObject()) continue;
+                JsonObject mod = element.getAsJsonObject();
+                String id = GsonJsonUtils.getStringSafe(mod, "id");
+                String name = GsonJsonUtils.getStringSafe(mod, "name");
+                if(id == null || name == null || id.isEmpty() || name.isEmpty()) continue;
+                titles.put(id, name);
+            }
+        }
+        return titles;
+    }
+
+    /**
+     * The projects one file leans on. CurseForge marks a relation rather than a
+     * version of them, so the launcher picks the version that fits the instance.
+     */
+    private static ContentDependency[] readDependencies(JsonObject file) {
+        JsonArray array = GsonJsonUtils.getJsonArraySafe(file, "dependencies");
+        if(array == null || array.size() == 0) return new ContentDependency[0];
+        ArrayList<ContentDependency> found = new ArrayList<>();
+        for(JsonElement element : array) {
+            if(element == null || !element.isJsonObject()) continue;
+            JsonObject dependency = element.getAsJsonObject();
+            int modId = GsonJsonUtils.getIntSafe(dependency, "modId", 0);
+            if(modId == 0) continue;
+            int relation = GsonJsonUtils.getIntSafe(dependency, "relationType", 0);
+            boolean required;
+            if(relation == CURSEFORGE_RELATION_REQUIRED) required = true;
+            else if(relation == CURSEFORGE_RELATION_OPTIONAL) required = false;
+            else continue;
+            found.add(new ContentDependency(Constants.SOURCE_CURSEFORGE,
+                    Integer.toString(modId), null, required));
+        }
+        return found.toArray(new ContentDependency[0]);
     }
 
     @Override

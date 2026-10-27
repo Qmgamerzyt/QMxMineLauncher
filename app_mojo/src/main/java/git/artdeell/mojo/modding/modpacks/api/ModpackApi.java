@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -51,6 +52,20 @@ public interface ModpackApi {
      */
     default List<SearchCategory> listCategories(ContentKind kind) {
         return Collections.emptyList();
+    }
+
+    /**
+     * The titles of several projects in one go, keyed by the id each was asked for.
+     * Dependencies are named by an id alone until one of them is opened, and this is
+     * what puts a name to them in the list they are offered in. Ids the host does not
+     * know about are left out of the answer.
+     *
+     * @param apiSource  the host the ids belong to
+     * @param projectIds the ids to look up
+     * @return the titles of the projects the host could name
+     */
+    default Map<String, String> fetchTitles(int apiSource, List<String> projectIds) {
+        return Collections.emptyMap();
     }
 
     /**

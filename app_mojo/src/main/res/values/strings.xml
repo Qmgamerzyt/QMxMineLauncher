@@ -356,6 +356,14 @@
     <string name="content_manage_removed">Removed %1$s</string>
     <string name="content_manage_enabled">Enabled %1$s</string>
     <string name="content_manage_disabled">Disabled %1$s</string>
+    <string name="content_manage_failed">Could not change %1$s</string>
+    <string name="content_dependencies_title">These come along</string>
+    <string name="content_dependencies_required">%1$s (needed)</string>
+    <string name="content_dependencies_optional">%1$s</string>
+    <string name="content_dependencies_failed">Could not install %1$s</string>
+    <string name="content_dependencies_report_title">Dependencies</string>
+    <string name="content_dependencies_report">These projects did not make it into the instance:</string>
+    <string name="content_dependencies_stopped">Stopped looking for dependencies: %1$s</string>
     <string name="content_manage_remove">Remove</string>
     <string name="main_content_manager">Browse content</string>
     <string name="content_tab_mods">Mods</string>

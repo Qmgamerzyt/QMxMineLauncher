@@ -14,14 +14,18 @@ public class ModDetail extends ModItem {
     public String[] versionUrls;
     /* SHA 1 hashes, null if a hash is unavailable */
     public String[] versionHashes;
+    /* The projects each version leans on, null when the host says nothing about them */
+    public ContentDependency[][] versionDependencies;
     public ModDetail(ModItem item, String[] versionNames, String[] mcVersionNames,
-                     String[] loaderNames, String[] versionUrls, String[] hashes) {
+                     String[] loaderNames, String[] versionUrls, String[] hashes,
+                     ContentDependency[][] versionDependencies) {
         super(item.apiSource, item.kind, item.id, item.title, item.description, item.imageUrl);
         this.versionNames = versionNames;
         this.mcVersionNames = mcVersionNames;
         this.loaderNames = loaderNames;
         this.versionUrls = versionUrls;
         this.versionHashes = hashes;
+        this.versionDependencies = versionDependencies;
 
         // Add the mc version to the version model
         for (int i=0; i<versionNames.length; i++){
@@ -58,6 +62,16 @@ public class ModDetail extends ModItem {
             }
         }
         return bestIndex;
+    }
+
+    /**
+     * The projects the version at the given index leans on, empty when the host
+     * says nothing about them or the index is out of reach.
+     */
+    public ContentDependency[] dependenciesOf(int index) {
+        if(versionDependencies == null || index < 0 || index >= versionDependencies.length
+                || versionDependencies[index] == null) return new ContentDependency[0];
+        return versionDependencies[index];
     }
 
     /** Whether one version was published for the given loader, matched without case. */

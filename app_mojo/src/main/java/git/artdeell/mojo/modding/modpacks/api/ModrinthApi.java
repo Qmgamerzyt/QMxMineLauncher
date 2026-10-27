@@ -1,6 +1,8 @@
 package git.artdeell.mojo.modding.modpacks.api;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.kdt.mcgui.ProgressLayout;
 
@@ -17,6 +19,7 @@ import git.artdeell.mojo.modding.modpacks.api.modloader.ForgelikeLoaderInstaller
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.api.modloader.Lwjgl3ifyLoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentDependency;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
@@ -31,15 +34,20 @@ import git.artdeell.mojo.utils.ZipUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipFile;
 
 public class ModrinthApi implements ModpackApi{
+    /** How many projects one call may name, the host caps what a query string carries. */
+    private static final int TITLE_BATCH_SIZE = 50;
     private final ApiHandler mApiHandler;
     public ModrinthApi(){
         mApiHandler = new ApiHandler("https://api.modrinth.com/v2");
@@ -168,6 +176,7 @@ public class ModrinthApi implements ModpackApi{
         String[] loaders = new String[response.size()];
         String[] urls = new String[response.size()];
         String[] hashes = new String[response.size()];
+        ContentDependency[][] dependencies = new ContentDependency[response.size()][];
 
         for (int i=0; i<response.size(); ++i) {
             JsonObject version = response.get(i).getAsJsonObject();
@@ -177,11 +186,12 @@ public class ModrinthApi implements ModpackApi{
             // matching the instance against the list
             mcNames[i] = readArrayFirst(version, "game_versions");
             loaders[i] = readJoinedArray(version, "loaders");
+            dependencies[i] = readDependencies(version);
             JsonArray files = version.getAsJsonArray("files");
-            urls[i] = files != null && !files.isEmpty() && files.get(0).isJsonObject()
+            urls[i] = files != null && files.size() > 0 && files.get(0).isJsonObject()
                     ? readString(files.get(0).getAsJsonObject(), "url") : null;
             // Assume there may not be hashes, in case the API changes
-            if(files == null || files.isEmpty() || !files.get(0).isJsonObject()) {
+            if(files == null || files.size() == 0 || !files.get(0).isJsonObject()) {
                 hashes[i] = null;
                 continue;
             }
@@ -196,7 +206,63 @@ public class ModrinthApi implements ModpackApi{
             hashes[i] = hashesMap.get("sha1").getAsString();
         }
 
-        return new ModDetail(item, names, mcNames, loaders, urls, hashes);
+        return new ModDetail(item, names, mcNames, loaders, urls, hashes, dependencies);
+    }
+
+    @Override
+    public Map<String, String> fetchTitles(int apiSource, List<String> projectIds) {
+        Map<String, String> titles = new LinkedHashMap<>();
+        if(projectIds == null || projectIds.isEmpty()) return titles;
+        for(int start = 0; start < projectIds.size(); start += TITLE_BATCH_SIZE) {
+            List<String> batch = projectIds.subList(start,
+                    Math.min(start + TITLE_BATCH_SIZE, projectIds.size()));
+            // The host wants the whole batch as one JSON array, which does not travel
+            // through a query string as it stands
+            String endpoint;
+            try {
+                endpoint = "projects?ids=" + URLEncoder.encode(new Gson().toJson(batch), "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                return titles;
+            }
+            JsonArray response = mApiHandler.get(endpoint, JsonArray.class);
+            if(response == null) continue;
+            for(JsonElement element : response) {
+                if(element == null || !element.isJsonObject()) continue;
+                JsonObject project = element.getAsJsonObject();
+                String id = readString(project, "id");
+                String title = readString(project, "title");
+                if(id.isEmpty() || title.isEmpty()) continue;
+                titles.put(id, title);
+            }
+        }
+        return titles;
+    }
+
+    /**
+     * The projects one version leans on. Modrinth names a version of each of them
+     * rarely, so the launcher picks the version that fits the instance instead.
+     */
+    private ContentDependency[] readDependencies(JsonObject version) {
+        JsonArray array = readArray(version, "dependencies");
+        if(array == null || array.size() == 0) return new ContentDependency[0];
+        ArrayList<ContentDependency> found = new ArrayList<>();
+        for(JsonElement element : array) {
+            if(element == null || !element.isJsonObject()) continue;
+            JsonObject dependency = element.getAsJsonObject();
+            String projectId = readString(dependency, "project_id");
+            if(projectId.isEmpty()) continue;
+            String type = readString(dependency, "dependency_type");
+            // The other relations are either already inside the file or name something
+            // that must stay apart from it, neither of which the launcher installs
+            boolean required;
+            if("required".equals(type)) required = true;
+            else if("optional".equals(type)) required = false;
+            else continue;
+            String versionId = readString(dependency, "version_id");
+            found.add(new ContentDependency(Constants.SOURCE_MODRINTH, projectId,
+                    versionId.isEmpty() ? null : versionId, required));
+        }
+        return found.toArray(new ContentDependency[0]);
     }
 
     /** The value of a string field, or an empty string when it is missing or not a string. */
@@ -218,7 +284,7 @@ public class ModrinthApi implements ModpackApi{
     /** The first entry of a string array field, or an empty string when there is none. */
     private static String readArrayFirst(JsonObject object, String key) {
         JsonArray array = readArray(object, key);
-        if(array == null || array.isEmpty() || array.get(0).isJsonNull()) return "";
+        if(array == null || array.size() == 0 || array.get(0).isJsonNull()) return "";
         try {
             return array.get(0).getAsString();
         }catch (RuntimeException e) {
@@ -229,7 +295,7 @@ public class ModrinthApi implements ModpackApi{
     /** Every entry of a string array field joined by a comma, or an empty string. */
     private static String readJoinedArray(JsonObject object, String key) {
         JsonArray array = readArray(object, key);
-        if(array == null || array.isEmpty()) return "";
+        if(array == null || array.size() == 0) return "";
         StringBuilder joined = new StringBuilder();
         for(JsonElement element : array) {
             if(element.isJsonNull()) continue;

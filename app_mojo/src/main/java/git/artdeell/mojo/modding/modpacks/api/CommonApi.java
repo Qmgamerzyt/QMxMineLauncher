@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -164,6 +165,13 @@ public class CommonApi implements ModpackApi {
             mCategoryCache.put(kind.name(), result);
         }
         return result;
+    }
+
+    @Override
+    public Map<String, String> fetchTitles(int apiSource, List<String> projectIds) {
+        ModpackApi api = getModpackApi(apiSource);
+        if(api == null) return Collections.emptyMap();
+        return api.fetchTitles(apiSource, projectIds);
     }
 
     @Override

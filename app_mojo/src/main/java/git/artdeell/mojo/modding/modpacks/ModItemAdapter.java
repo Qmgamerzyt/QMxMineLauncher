@@ -2,6 +2,7 @@ package git.artdeell.mojo.modding.modpacks;
 
 import android.annotation.SuppressLint;
 import android.content.res.Resources;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,6 +25,7 @@ import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
+import git.artdeell.mojo.modding.modpacks.api.DependencyResolver;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
 import git.artdeell.mojo.modding.modpacks.imagecache.ImageReceiver;
 import git.artdeell.mojo.modding.modpacks.imagecache.ModIconCache;
@@ -180,12 +182,17 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
                     mExtendedButton.setOnClickListener(v1 -> {
                         int position = mExtendedSpinner.getSelectedItemPosition();
+                        Context appContext = v1.getContext().getApplicationContext();
                         if(mModDetail.kind == ContentKind.MODPACK) {
-                            mModpackApi.handleModpackInstallation(
-                                    v1.getContext().getApplicationContext(), mModDetail, position);
+                            mModpackApi.handleModpackInstallation(appContext, mModDetail, position);
                         }else {
-                            ContentInstaller.handleContentInstallation(
-                                    v1.getContext().getApplicationContext(), mModDetail, position);
+                            // The projects the chosen version leans on are offered before
+                            // anything is installed, the required ones among them marked
+                            // as such and kept ticked
+                            DependencyResolver.prompt(appContext, mModpackApi, mModDetail, position,
+                                    (titles, approved) -> ContentInstaller.handleContentInstallation(
+                                            appContext, mModpackApi, mModDetail, position,
+                                            titles, approved));
                         }
                     });
                     mExtendedSpinner.setAdapter(mLoadingAdapter);
