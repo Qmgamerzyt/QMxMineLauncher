@@ -49,6 +49,7 @@ public class SearchCategory {
      */
     @NonNull
     public String label() {
+        if(name == null) return "";
         if(!showProvider) return name;
         if(knownByModrinth() && knownByCurseforge()) return name;
         if(knownByModrinth()) return name + " (Modrinth)";

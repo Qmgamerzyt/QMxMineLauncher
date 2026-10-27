@@ -78,11 +78,11 @@ public class InstalledContent {
         if(entries.isEmpty()) {
             if(kind == null) {
                 Tools.showErrorRemote(context, R.string.content_manage_none,
-                        new IOException("There is nothing installed in " + instance.name));
+                        new IOException("There is nothing installed in " + instance.displayName()));
             }else {
                 Tools.showErrorRemote(context.getString(R.string.content_manage_kind_empty,
                         context.getString(kind.labelRes)),
-                        new IOException("No " + kind + " is installed in " + instance.name));
+                        new IOException("No " + kind + " is installed in " + instance.displayName()));
             }
             return;
         }

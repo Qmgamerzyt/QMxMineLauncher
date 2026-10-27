@@ -134,8 +134,8 @@ public class ContentInstaller {
         int checked = 0;
         for(int i = 0; i < instances.size(); i++) {
             Instance instance = instances.get(i);
-            names[i] = instance.name;
-            if(selected != null && selected.name != null && selected.name.equals(instance.name)) checked = i;
+            names[i] = instance.displayName();
+            if(selected != null && instance.displayName().equals(selected.displayName())) checked = i;
         }
         new AlertDialog.Builder(context)
                 .setTitle(titleRes)
