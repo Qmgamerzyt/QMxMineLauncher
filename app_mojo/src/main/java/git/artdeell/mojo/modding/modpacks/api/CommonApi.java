@@ -7,14 +7,18 @@ import androidx.annotation.NonNull;
 import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
+import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -114,6 +118,52 @@ public class CommonApi implements ModpackApi {
         commonApiSearchResult.totalResultCount = totalSize;
         commonApiSearchResult.results = concatenatedItems;
         return commonApiSearchResult;
+    }
+
+    /** The category list of each kind, worked out once and kept for the next filter. */
+    private final HashMap<String, List<SearchCategory>> mCategoryCache = new HashMap<>();
+
+    /**
+     * Every host's categories under one list, joined on the name so a category both
+     * of them carry needs to be picked only once to narrow the whole search. A host
+     * that does not group content of this kind contributes nothing and is left out
+     * of the part of the search the categories ask for.
+     *
+     * @param kind the content the categories belong to
+     * @return the categories in alphabetical order, ready for the filter dialog
+     */
+    @Override
+    public List<SearchCategory> listCategories(ContentKind kind) {
+        synchronized (mCategoryCache) {
+            List<SearchCategory> cached = mCategoryCache.get(kind.name());
+            if(cached != null) return cached;
+        }
+        HashMap<String, SearchCategory> byName = new HashMap<>();
+        ArrayList<SearchCategory> merged = new ArrayList<>();
+        for(ModpackApi api : mModpackApis) {
+            for(SearchCategory category : api.listCategories(kind)) {
+                String key = SearchCategory.normalize(category.name);
+                if(key.isEmpty()) continue;
+                SearchCategory held = byName.get(key);
+                if(held == null) {
+                    byName.put(key, category);
+                    merged.add(category);
+                }else {
+                    held.merge(category);
+                }
+            }
+        }
+        // A single host behind the search leaves nothing to tell apart, so the
+        // labels drop the name of it and only the chosen categories are shown
+        if(mModpackApis.length < 2) {
+            for(SearchCategory category : merged) category.showProvider = false;
+        }
+        Collections.sort(merged, (left, right) -> left.name.compareToIgnoreCase(right.name));
+        List<SearchCategory> result = Collections.unmodifiableList(merged);
+        synchronized (mCategoryCache) {
+            mCategoryCache.put(kind.name(), result);
+        }
+        return result;
     }
 
     @Override

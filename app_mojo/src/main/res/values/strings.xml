@@ -365,6 +365,31 @@
     <string name="content_row_manage">Manage</string>
     <string name="content_row_browse">Browse</string>
     <string name="content_manage_kind_empty">This instance has no %1$s installed yet.</string>
+    <string name="content_filter_loader">Loader</string>
+    <string name="content_filter_sort">Sort by</string>
+    <string name="content_filter_categories">Categories</string>
+    <string name="content_filter_any">Any</string>
+    <string name="content_filter_categories_count">%1$d chosen</string>
+    <string name="content_filter_categories_none">This kind of content has no categories to filter by.</string>
+    <string name="content_filter_categories_error">Could not load the categories.</string>
+
+    <!-- One label per entry of SearchLoader, in the order the enum declares them -->
+    <string-array name="content_filter_loaders">
+        <item>Any loader</item>
+        <item>Fabric</item>
+        <item>Forge</item>
+        <item>NeoForge</item>
+        <item>Quilt</item>
+    </string-array>
+
+    <!-- One label per entry of SearchSort, in the order the enum declares them -->
+    <string-array name="content_filter_sorts">
+        <item>Relevance</item>
+        <item>Downloads</item>
+        <item>Follows</item>
+        <item>Recently updated</item>
+        <item>Newest</item>
+    </string-array>
 
     <string name="modpack_download_downloading_metadata">Downloading modpack metadata (%.2f MB / %.2f MB)</string>
     <string name="modpack_download_downloading_mods">Downloading mods (%.2f MB / %.2f MB)</string>

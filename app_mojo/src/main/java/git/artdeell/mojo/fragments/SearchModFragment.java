@@ -9,12 +9,16 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -39,7 +43,10 @@ import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
 import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
 import git.artdeell.mojo.modding.modpacks.api.ModpackApi;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
+import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
+import git.artdeell.mojo.modding.modpacks.models.SearchLoader;
+import git.artdeell.mojo.modding.modpacks.models.SearchSort;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
 import git.artdeell.mojo.progresskeeper.TaskCountListener;
@@ -51,6 +58,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 
 public class SearchModFragment extends Fragment implements ModItemAdapter.SearchResultCallback {
@@ -208,6 +217,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         };
         ProgressKeeper.addTaskCountListener(mTaskCountListener);
         applyKindArgument(view);
+        refreshFilterButton();
 
         searchMods(null);
     }
@@ -282,9 +292,21 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         ContentKind kind = (ContentKind) view.getTag();
         if(kind == null || kind == mSearchFilters.kind) return;
         mSearchFilters.kind = kind;
+        // Every kind is grouped in its own way, so the picked categories belong to
+        // the tab that was showing when they were chosen and start over here
+        mSearchFilters.clearCategories();
         refreshTabs();
         updateImportButton();
+        refreshFilterButton();
         searchMods(mSearchEditText.getText().toString());
+    }
+
+    /** Marks the filter button in the accent colour while the search stays narrowed. */
+    private void refreshFilterButton() {
+        Context context = getContext();
+        if(mFilterButton == null || context == null) return;
+        mFilterButton.setColorFilter(ContextCompat.getColor(context, mSearchFilters.isFiltered()
+                ? R.color.minebutton_color : R.color.secondary_text));
     }
 
     private void refreshTabs() {
@@ -334,14 +356,38 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         dialog.setOnShowListener(dialogInterface -> {
             TextView mSelectedVersion = dialog.findViewById(R.id.search_mod_selected_mc_version_textview);
             Button mSelectVersionButton = dialog.findViewById(R.id.search_mod_mc_version_button);
+            Spinner mLoaderSpinner = dialog.findViewById(R.id.search_mod_loader_spinner);
+            Spinner mSortSpinner = dialog.findViewById(R.id.search_mod_sort_spinner);
+            Button mCategoriesButton = dialog.findViewById(R.id.search_mod_categories_button);
             Button mApplyButton = dialog.findViewById(R.id.search_mod_apply_filters);
 
             assert mSelectVersionButton != null;
             assert mSelectedVersion != null;
+            assert mLoaderSpinner != null;
+            assert mSortSpinner != null;
+            assert mCategoriesButton != null;
             assert mApplyButton != null;
+
+            // The labels sit in the same order the enums are declared in, so the
+            // position in the spinner is the value the search will be given
+            mLoaderSpinner.setAdapter(new ArrayAdapter<>(requireContext(),
+                    R.layout.item_simple_list_1, getResources().getStringArray(R.array.content_filter_loaders)));
+            mSortSpinner.setAdapter(new ArrayAdapter<>(requireContext(),
+                    R.layout.item_simple_list_1, getResources().getStringArray(R.array.content_filter_sorts)));
+            mLoaderSpinner.setSelection(SearchLoader.fromName(mSearchFilters.loader).ordinal());
+            mSortSpinner.setSelection(SearchSort.fromValue(mSearchFilters.sort).ordinal());
+
+            // The categories are held back until Apply, so the list can be opened and
+            // changed without the search running on every tick
+            ArrayList<SearchCategory> pickedCategories = new ArrayList<>(mSearchFilters.categories);
+            updateCategoryLabel(mCategoriesButton, pickedCategories);
+            ContentKind dialogKind = mSearchFilters.kind;
 
             // Setup the expendable list behavior
             mSelectVersionButton.setOnClickListener(v -> VersionSelectorDialog.open(v.getContext(), true, (id, snapshot)-> mSelectedVersion.setText(id)));
+
+            mCategoriesButton.setOnClickListener(v ->
+                    openCategoryPicker(v.getContext(), dialogKind, pickedCategories, mCategoriesButton));
 
             // Apply visually all the current settings
             mSelectedVersion.setText(mSearchFilters.mcVersion);
@@ -349,11 +395,93 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             // Apply the new settings
             mApplyButton.setOnClickListener(v -> {
                 mSearchFilters.mcVersion = mSelectedVersion.getText().toString();
+                int loaderPosition = mLoaderSpinner.getSelectedItemPosition();
+                int sortPosition = mSortSpinner.getSelectedItemPosition();
+                mSearchFilters.loader = loaderPosition >= 0 && loaderPosition < SearchLoader.values().length
+                        ? SearchLoader.values()[loaderPosition].name() : SearchLoader.ANY.name();
+                mSearchFilters.sort = sortPosition >= 0 && sortPosition < SearchSort.values().length
+                        ? SearchSort.values()[sortPosition].name() : SearchSort.RELEVANCE.name();
+                mSearchFilters.clearCategories();
+                mSearchFilters.categories.addAll(pickedCategories);
+                refreshFilterButton();
                 searchMods(mSearchEditText.getText().toString());
                 dialogInterface.dismiss();
             });
         });
 
         dialog.show();
+    }
+
+    /** Worded summary of the chosen categories, standing for the whole selection. */
+    private void updateCategoryLabel(Button button, List<SearchCategory> picked) {
+        if(picked.isEmpty()) {
+            button.setText(R.string.content_filter_any);
+        }else if(picked.size() == 1) {
+            button.setText(picked.get(0).label());
+        }else {
+            button.setText(button.getContext().getString(R.string.content_filter_categories_count, picked.size()));
+        }
+    }
+
+    /**
+     * Fetch the categories of the kind the dialog was opened on and let the reader
+     * tick the ones to narrow the search to. A category carried by one host only
+     * narrows the search down to that host, which is why the labels say who they
+     * belong to.
+     *
+     * @param context  where the list and any message are shown
+     * @param kind     the content the categories are fetched for
+     * @param picked   the selection so far, rewritten once the list is confirmed
+     * @param label    the button carrying the summary of the selection
+     */
+    private void openCategoryPicker(Context context, ContentKind kind,
+                                    ArrayList<SearchCategory> picked, Button label) {
+        if(modpackApi == null) return;
+        MojoApplication.sExecutorService.execute(() -> {
+            List<SearchCategory> available;
+            try {
+                available = modpackApi.listCategories(kind);
+            }catch (RuntimeException e) {
+                Log.e(TAG, "Could not list the categories of " + kind, e);
+                runOnUiThread(() -> Toast.makeText(context,
+                        R.string.content_filter_categories_error, Toast.LENGTH_SHORT).show());
+                return;
+            }
+            runOnUiThread(() -> {
+                if(available.isEmpty()) {
+                    Toast.makeText(context, R.string.content_filter_categories_none,
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String[] labels = new String[available.size()];
+                boolean[] checked = new boolean[available.size()];
+                for(int i = 0; i < available.size(); i++) {
+                    labels[i] = available.get(i).label();
+                    checked[i] = holds(picked, available.get(i));
+                }
+                new AlertDialog.Builder(context)
+                        .setTitle(R.string.content_filter_categories)
+                        .setMultiChoiceItems(labels, checked,
+                                (dialog, which, isChecked) -> checked[which] = isChecked)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                            picked.clear();
+                            for(int i = 0; i < available.size(); i++) {
+                                if(checked[i]) picked.add(available.get(i));
+                            }
+                            updateCategoryLabel(label, picked);
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            });
+        });
+    }
+
+    /** Whether a category already sits in the selection, matched on the name alone. */
+    private static boolean holds(List<SearchCategory> picked, SearchCategory category) {
+        String wanted = SearchCategory.normalize(category.name);
+        for(SearchCategory selected : picked) {
+            if(wanted.equals(SearchCategory.normalize(selected.name))) return true;
+        }
+        return false;
     }
 }

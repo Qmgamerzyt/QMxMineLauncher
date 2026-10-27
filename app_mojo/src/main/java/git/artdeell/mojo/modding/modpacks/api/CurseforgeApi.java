@@ -20,11 +20,15 @@ import git.artdeell.mojo.modding.modpacks.api.modloader.FabriclikeLoaderInstalle
 import git.artdeell.mojo.modding.modpacks.api.modloader.ForgelikeLoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.CurseManifest;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
+import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
+import git.artdeell.mojo.modding.modpacks.models.SearchLoader;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
+import git.artdeell.mojo.modding.modpacks.models.SearchSort;
 import git.artdeell.mojo.utils.FileUtils;
 import git.artdeell.mojo.utils.GsonJsonUtils;
 import git.artdeell.mojo.utils.ZipUtils;
@@ -34,7 +38,9 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
@@ -44,7 +50,6 @@ public class CurseforgeApi implements ModpackApi{
     // Stolen from
     // https://github.com/AnzhiZhang/CurseForgeModpackDownloader/blob/6cb3f428459f0cc8f444d16e54aea4cd1186fd7b/utils/requester.py#L93
     private static final int CURSEFORGE_MC_GAME_ID = 432;
-    private static final int CURSEFORGE_SORT_RELEVANCY = 1;
     private static final int CURSEFORGE_PAGINATION_SIZE = 50;
     private static final int CURSEFORGE_PAGINATION_END_REACHED = -1;
     private static final int CURSEFORGE_PAGINATION_ERROR = -2;
@@ -62,10 +67,28 @@ public class CurseforgeApi implements ModpackApi{
         params.put("gameId", CURSEFORGE_MC_GAME_ID);
         params.put("classId", searchFilters.kind.curseforgeClassId);
         params.put("searchFilter", searchFilters.name);
-        params.put("sortField", CURSEFORGE_SORT_RELEVANCY);
+        params.put("sortField", SearchSort.fromValue(searchFilters.sort).curseforgeField);
         params.put("sortOrder", "desc");
         if(searchFilters.mcVersion != null && !searchFilters.mcVersion.isEmpty())
             params.put("gameVersion", searchFilters.mcVersion);
+        // A loader carries its own code here rather than a category
+        SearchLoader loader = SearchLoader.fromName(searchFilters.loader);
+        if(loader != SearchLoader.ANY) params.put("modLoaderType", loader.curseforgeCode);
+        // Several categories go in as one bracketed list. CurseForge reads the plain
+        // spelling as if nothing had been asked for, so a lone one joins in as well
+        int[] categoryIds = searchFilters.curseforgeCategories();
+        // The picked categories belong to the other host alone, this one has nothing
+        // to narrow by and answers with an empty page rather than a full one
+        if(categoryIds.length == 0 && !searchFilters.categories.isEmpty())
+            return emptyResult(curseforgeSearchResult);
+        if(categoryIds.length > 0) {
+            StringBuilder bracketed = new StringBuilder("[");
+            for(int i = 0; i < categoryIds.length; i++) {
+                if(i > 0) bracketed.append(',');
+                bracketed.append(categoryIds[i]);
+            }
+            params.put("categoryIds", bracketed.append(']').toString());
+        }
         if(previousPageResult != null)
             params.put("index", curseforgeSearchResult.previousOffset);
 
@@ -98,6 +121,37 @@ public class CurseforgeApi implements ModpackApi{
         curseforgeSearchResult.previousOffset += dataArray.size();
         return curseforgeSearchResult;
 
+    }
+
+    /** A page with nothing in it, for a filter this host has no way to answer. */
+    private CurseforgeSearchResult emptyResult(CurseforgeSearchResult previous) {
+        CurseforgeSearchResult result = new CurseforgeSearchResult();
+        result.results = new ModItem[0];
+        result.totalResultCount = 0;
+        result.previousOffset = previous == null ? 0 : previous.previousOffset;
+        return result;
+    }
+
+    @Override
+    public List<SearchCategory> listCategories(ContentKind kind) {
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("gameId", CURSEFORGE_MC_GAME_ID);
+        params.put("classId", kind.curseforgeClassId);
+        JsonObject response = mApiHandler.get("categories", params, JsonObject.class);
+        if(response == null) return Collections.emptyList();
+        JsonArray data = response.getAsJsonArray("data");
+        if(data == null) return Collections.emptyList();
+        ArrayList<SearchCategory> categories = new ArrayList<>(data.size());
+        for(int i = 0; i < data.size(); i++) {
+            JsonObject element = data.get(i).getAsJsonObject();
+            if(!element.has("name") || element.get("name").isJsonNull()
+                    || !element.has("id") || element.get("id").isJsonNull()) continue;
+            String name = element.get("name").getAsString();
+            int id = element.get("id").getAsInt();
+            if(name.isEmpty() || id == 0) continue;
+            categories.add(new SearchCategory(name, null, id));
+        }
+        return categories;
     }
 
     @Override

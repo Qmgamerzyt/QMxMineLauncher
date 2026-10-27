@@ -21,8 +21,11 @@ import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.modding.modpacks.models.ModrinthIndex;
+import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
+import git.artdeell.mojo.modding.modpacks.models.SearchLoader;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
+import git.artdeell.mojo.modding.modpacks.models.SearchSort;
 import git.artdeell.mojo.utils.FileUtils;
 import git.artdeell.mojo.utils.ZipUtils;
 
@@ -30,7 +33,9 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipFile;
 
@@ -64,17 +69,35 @@ public class ModrinthApi implements ModpackApi{
 
 
         // Build the facets filters
+        // A picked category that Modrinth does not group content under leaves this
+        // host with nothing to narrow by, and a search it cannot honour answers
+        // with an empty page instead of a full one
+        List<String> pickedCategories = searchFilters.modrinthCategories();
+        if(pickedCategories.isEmpty() && !searchFilters.categories.isEmpty())
+            return emptyResult(modrinthSearchResult);
         HashMap<String, Object> params = new HashMap<>();
         StringBuilder facetString = new StringBuilder();
         facetString.append("[");
         facetString.append(String.format("[\"project_type:%s\"]", searchFilters.kind.modrinthType));
         if(searchFilters.mcVersion != null && !searchFilters.mcVersion.isEmpty())
             facetString.append(String.format(",[\"versions:%s\"]", searchFilters.mcVersion));
+        // The loader and every picked category share one group, so a hit carrying any of them is kept
+        StringBuilder categoryFacets = new StringBuilder();
+        SearchLoader pickedLoader = SearchLoader.fromName(searchFilters.loader);
+        if(pickedLoader != SearchLoader.ANY)
+            categoryFacets.append(String.format("\"categories:%s\"", pickedLoader.facet));
+        for(String category : pickedCategories) {
+            if(categoryFacets.length() > 0) categoryFacets.append(',');
+            categoryFacets.append(String.format("\"categories:%s\"", category));
+        }
+        if(categoryFacets.length() > 0) {
+            facetString.append(",[").append(categoryFacets).append("]");
+        }
         facetString.append("]");
         params.put("facets", facetString.toString());
         params.put("query", searchFilters.name);
         params.put("limit", 50);
-        params.put("index", "relevance");
+        params.put("index", SearchSort.fromValue(searchFilters.sort).modrinthIndex);
         if(modrinthSearchResult != null)
             params.put("offset", modrinthSearchResult.previousOffset);
 
@@ -103,6 +126,36 @@ public class ModrinthApi implements ModpackApi{
         modrinthSearchResult.results = items.toArray(new ModItem[0]);
         modrinthSearchResult.totalResultCount = response.get("total_hits").getAsInt();
         return modrinthSearchResult;
+    }
+
+    /** A page with nothing in it, for a filter this host has no way to answer. */
+    private ModrinthSearchResult emptyResult(ModrinthSearchResult previous) {
+        ModrinthSearchResult result = new ModrinthSearchResult();
+        result.results = new ModItem[0];
+        result.totalResultCount = 0;
+        result.previousOffset = previous == null ? 0 : previous.previousOffset;
+        return result;
+    }
+
+    @Override
+    public List<SearchCategory> listCategories(ContentKind kind) {
+        if(!kind.onModrinth()) return Collections.emptyList();
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("project_type", kind.modrinthType);
+        JsonArray response = mApiHandler.get("tag/category", params, JsonArray.class);
+        if(response == null) return Collections.emptyList();
+        ArrayList<SearchCategory> categories = new ArrayList<>(response.size());
+        for(int i = 0; i < response.size(); i++) {
+            JsonObject element = response.get(i).getAsJsonObject();
+            if(!element.has("name") || element.get("name").isJsonNull()) continue;
+            // Modrinth calls the key of a category its name at this endpoint
+            String name = element.get("name").getAsString();
+            String projectType = element.has("project_type") && !element.get("project_type").isJsonNull()
+                    ? element.get("project_type").getAsString() : null;
+            if(name.isEmpty() || !kind.modrinthType.equals(projectType)) continue;
+            categories.add(new SearchCategory(name, name, 0));
+        }
+        return categories;
     }
 
     @Override

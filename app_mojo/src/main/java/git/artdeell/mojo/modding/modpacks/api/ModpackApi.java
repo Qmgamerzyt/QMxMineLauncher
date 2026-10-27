@@ -9,13 +9,17 @@ import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
+import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 /**
  *
@@ -35,6 +39,18 @@ public interface ModpackApi {
      */
     default SearchResult searchMod(SearchFilters searchFilters) {
         return searchMod(searchFilters, null);
+    }
+
+    /**
+     * The categories a host groups content of this kind under, used to build the list
+     * the filter dialog offers. A host with nothing to group it by answers with an
+     * empty list, which keeps it out of that part of the search.
+     *
+     * @param kind the content the categories belong to
+     * @return the categories, each carrying the key the host knows it by
+     */
+    default List<SearchCategory> listCategories(ContentKind kind) {
+        return Collections.emptyList();
     }
 
     /**
