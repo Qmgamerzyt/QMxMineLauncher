@@ -68,9 +68,12 @@ public class DownloadUtils {
                                              Tools.DownloaderFeedback monitor) throws IOException {
         FileUtils.ensureParentDirectory(outputFile);
 
+        long generation = DownloadStop.generation();
         HttpURLConnection conn = (HttpURLConnection) new URL(urlInput).openConnection();
-        InputStream readStr = conn.getInputStream();
-        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        try (InputStream readStr = conn.getInputStream();
+             FileOutputStream fos = new FileOutputStream(outputFile)) {
             int current;
             int overall = 0;
             int length = conn.getContentLength();
@@ -78,13 +81,35 @@ public class DownloadUtils {
             if (buffer == null) buffer = new byte[65535];
 
             while ((current = readStr.read(buffer)) != -1) {
+                DownloadStop.check(generation);
                 overall += current;
                 fos.write(buffer, 0, current);
                 monitor.updateProgress(overall, length);
             }
+        } catch (DownloadCancelledException e) {
+            throw e;
+        } catch (IOException e) {
+            // A read that timed out while the stop button was pressed belongs to the stop
+            if (DownloadStop.generation() != generation) throw new DownloadCancelledException();
+            throw e;
+        } finally {
             conn.disconnect();
         }
 
+    }
+
+    /**
+     * Copy a stream into another, giving up as soon as the stop button was pressed after
+     * the copy began. Used for the archives that come from the player's own storage.
+     */
+    public static void copyCancellable(InputStream inputStream, OutputStream outputStream) throws IOException {
+        long generation = DownloadStop.generation();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            DownloadStop.check(generation);
+            outputStream.write(buffer, 0, read);
+        }
     }
 
     public static <T> T downloadStringCached(String url, String cacheName, ParseCallback<T> parseCallback) throws IOException, ParseException{

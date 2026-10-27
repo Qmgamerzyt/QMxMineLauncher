@@ -20,6 +20,7 @@ import git.artdeell.mojo.R;
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
 import git.artdeell.mojo.progresskeeper.ProgressListener;
 import git.artdeell.mojo.progresskeeper.TaskCountListener;
+import git.artdeell.mojo.utils.DownloadStop;
 
 import java.util.ArrayList;
 
@@ -62,6 +63,7 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
     private LinearLayout mLinearLayout;
     private TextView mTaskNumberDisplayer;
     private ImageView mFlipArrow;
+    private TextView mStopButton;
 
 
 
@@ -85,8 +87,10 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
         mLinearLayout = findViewById(R.id.progress_linear_layout);
         mTaskNumberDisplayer = findViewById(R.id.progress_textview);
         mFlipArrow = findViewById(R.id.progress_flip_arrow);
+        mStopButton = findViewById(R.id.progress_stop);
         setBackgroundColor(getResources().getColor(R.color.background_bottom_bar));
         setOnClickListener(this);
+        mStopButton.setOnClickListener(this);
     }
 
 
@@ -128,8 +132,22 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
 
     @Override
     public void onClick(View v) {
+        if(v == mStopButton) {
+            stopRunningWork();
+            return;
+        }
         mLinearLayout.setVisibility(mLinearLayout.getVisibility() == GONE ? VISIBLE : GONE);
         mFlipArrow.setRotation(mLinearLayout.getVisibility() == GONE? 0 : 180);
+    }
+
+    /**
+     * Ends the downloads that are running and takes the progress off the screen. The work
+     * notices on its own from here, the bar going away is only the answer to the press.
+     */
+    private void stopRunningWork() {
+        DownloadStop.stopAll();
+        ProgressKeeper.clearAll();
+        Toast.makeText(getContext(), R.string.progress_stopped, Toast.LENGTH_SHORT).show();
     }
 
     @Override

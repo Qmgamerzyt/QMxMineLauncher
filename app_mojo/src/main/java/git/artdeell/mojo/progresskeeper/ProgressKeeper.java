@@ -110,6 +110,18 @@ public class ProgressKeeper {
         return sProgressStates.size();
     }
 
+    /**
+     * Takes every running task off the screen at once, which is what the stop button does
+     * before the work itself notices and lets go.
+     */
+    public static void clearAll() {
+        ArrayList<String> keys;
+        synchronized (ProgressKeeper.class) {
+            keys = new ArrayList<>(sProgressStates.keySet());
+        }
+        for(String key : keys) submitProgress(key, -1, -1);
+    }
+
     public static boolean hasOngoingTasks() {
         return getTaskCount() > 0;
     }

@@ -4,6 +4,7 @@ import com.kdt.mcgui.ProgressLayout;
 
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.tasks.SpeedCalculator;
+import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.DownloadUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -40,6 +41,7 @@ public class Downloader {
     private final AtomicLong mInternetUsageCounter = new AtomicLong();
     private final AtomicBoolean mUseSizeProgress = new AtomicBoolean(true);
     private final SpeedCalculator mSpeedCalculator = new SpeedCalculator();
+    private volatile long mGeneration = DownloadStop.generation();
     private ExecutorService mDownloadService;
     private ExecutorService mVerifyService;
 
@@ -48,6 +50,7 @@ public class Downloader {
     }
 
     protected void runDownloads(ArrayList<? extends TaskMetadata> downloads) throws IOException, InterruptedException {
+        mGeneration = DownloadStop.generation();
         FileUtils.ensureDirectory(sPartFileDir);
         insertMetadata(downloads);
         try {
@@ -80,6 +83,7 @@ public class Downloader {
         }
         double totalMegabytes = totalSize / ONE_MEGABYTE;
         while(mDownloadedFileCounter.get() < totalCount) {
+            DownloadStop.check(mGeneration);
             IOException exception = mThreadException.get();
             if(exception != null) throw exception;
             if(sizeCounter) reportSizeProgress(totalMegabytes);
@@ -107,6 +111,7 @@ public class Downloader {
             for(TaskMetadata element : reducedList) executorService.submit(new CompleteMetadataTask(element, this));
             executorService.shutdown();
             while (!executorService.awaitTermination(33, TimeUnit.MILLISECONDS)) {
+                DownloadStop.check(mGeneration);
                 IOException exception = mThreadException.get();
                 if(exception != null) throw exception;
                 reportCountProgress(R.string.newerdl_inserting_metadata_count, reducedList.size());
@@ -162,6 +167,7 @@ public class Downloader {
         byte[] buffer = getBuffer();
         int readLen;
         while((readLen = inputStream.read(buffer)) != -1) {
+            DownloadStop.check(mGeneration);
             outputStream.write(buffer, 0, readLen);
             if(listener != null) listener.onBytesCopied(readLen);
             mInternetUsageCounter.getAndAdd(readLen);

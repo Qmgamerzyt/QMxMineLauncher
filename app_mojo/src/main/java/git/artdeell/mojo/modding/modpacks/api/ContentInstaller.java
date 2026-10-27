@@ -17,6 +17,7 @@ import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ContentPlacement;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.progresskeeper.DownloaderProgressWrapper;
+import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.DownloadUtils;
 import git.artdeell.mojo.utils.FileUtils;
 import git.artdeell.mojo.utils.ZipUtils;
@@ -67,7 +68,8 @@ public class ContentInstaller {
     public static void handleContentInstallation(Context context, ModpackApi api, ModDetail modDetail,
                                                  int selectedVersion, Map<String, String> titles,
                                                  Set<String> approvedOptional) {
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.global_waiting);
+        DownloadStop.beginWork();
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
         ArrayList<String> missed = new ArrayList<>();
         MojoApplication.sExecutorService.execute(() -> {
             try {
@@ -81,7 +83,8 @@ public class ContentInstaller {
                                     missed.addAll(DependencyResolver.installAll(context, api, in,
                                             modDetail, selectedVersion, titles, approvedOptional));
                                     return null;
-                                }, missed))));
+                                }, missed))),
+                        () -> ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK));
             }catch (IOException e) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
@@ -99,7 +102,8 @@ public class ContentInstaller {
      */
     public static void handleLocalWorldArchive(Context context, File archive, String archiveName) {
         String worldName = worldNameFor(FileUtils.removeExtension(archiveName));
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.global_waiting);
+        DownloadStop.beginWork();
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
         MojoApplication.sExecutorService.execute(() -> {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
@@ -107,7 +111,11 @@ public class ContentInstaller {
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
                         instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
-                                in -> installLocalWorld(in, archive, worldName), null))));
+                                in -> installLocalWorld(in, archive, worldName), null))),
+                        () -> {
+                            archive.delete();
+                            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                        });
             }catch (IOException e) {
                 archive.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
@@ -204,6 +212,7 @@ public class ContentInstaller {
         ContentKind kind = detail.kind;
         if(!kind.installsIntoExistingInstance())
             throw new IOException("Content of kind " + kind + " is not placed inside an instance");
+        DownloadStop.checkWork();
         if(selectedVersion < 0 || selectedVersion >= detail.versionUrls.length)
             throw new IOException("Version " + selectedVersion + " does not exist for " + detail.title);
 
@@ -227,7 +236,7 @@ public class ContentInstaller {
         try {
             DownloadUtils.ensureSha1(staged, hash, () -> DownloadUtils.downloadFileMonitored(
                     url, staged, buffer,
-                    new DownloaderProgressWrapper(R.string.modpack_download_downloading_metadata,
+                    new DownloaderProgressWrapper(kind.downloadProgressRes,
                             ProgressLayout.INSTALL_MODPACK)));
         }catch (IOException e) {
             staged.delete();

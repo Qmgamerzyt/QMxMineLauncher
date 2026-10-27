@@ -47,11 +47,11 @@ import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.modding.modpacks.models.SearchLoader;
 import git.artdeell.mojo.modding.modpacks.models.SearchSort;
+import git.artdeell.mojo.utils.DownloadStop;
+import git.artdeell.mojo.utils.DownloadUtils;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
 import git.artdeell.mojo.progresskeeper.TaskCountListener;
-
-import org.apache.commons.io.IOUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -110,20 +110,25 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     public void performLocalInstall(Uri uri, Context context, ContentResolver contentResolver) {
             String fileName = Tools.getFileName(context, uri);
             if (fileName == null) return;
+            DownloadStop.beginWork();
             if (mSearchFilters.kind == ContentKind.WORLD) {
                 performLocalWorldInstall(uri, fileName, context, contentResolver);
                 return;
             }
             File outFile = new File(Tools.DIR_CACHE, fileName + ".cf");
-            ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, R.string.multirt_progress_caching);
+            ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_copying);
             try (InputStream inputStream = contentResolver.openInputStream(uri);
                  OutputStream outputStream = new FileOutputStream(outFile)) {
-                if (inputStream == null) return;
-                IOUtils.copy(inputStream, outputStream);
+                if (inputStream == null) {
+                    ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                    return;
+                }
+                DownloadUtils.copyCancellable(inputStream, outputStream);
                 outputStream.flush();
             } catch (IOException e) {
-                Tools.showErrorRemote("Error", e);
+                outFile.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                Tools.showErrorRemote("Error", e);
                 return;
             }
             try {
@@ -142,19 +147,19 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
      */
     private void performLocalWorldInstall(Uri uri, String fileName, Context context, ContentResolver contentResolver) {
         File outFile = new File(Tools.DIR_CACHE, "world_" + System.nanoTime() + ".zip");
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, R.string.multirt_progress_caching);
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_copying);
         try (InputStream inputStream = contentResolver.openInputStream(uri);
              OutputStream outputStream = new FileOutputStream(outFile)) {
             if (inputStream == null) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 return;
             }
-            IOUtils.copy(inputStream, outputStream);
+            DownloadUtils.copyCancellable(inputStream, outputStream);
             outputStream.flush();
         } catch (IOException e) {
             outFile.delete();
-            Tools.showErrorRemote("Error", e);
             ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            Tools.showErrorRemote("Error", e);
             return;
         }
         ContentInstaller.handleLocalWorldArchive(context, outFile, fileName);

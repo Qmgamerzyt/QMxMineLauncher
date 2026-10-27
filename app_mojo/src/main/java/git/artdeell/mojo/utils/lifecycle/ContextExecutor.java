@@ -26,9 +26,22 @@ public class ContextExecutor {
      * @param activityRunnable the activity runnable
      */
     public static void executeActivity(ActivityRunnable activityRunnable) {
+        executeActivity(activityRunnable, null);
+    }
+
+    /**
+     * Schedules an ActivityRunnable to be executed ONLY if there is an Activity currently attached and in
+     * foreground. The activity is already gone by the time the runnable is meant to run, which happens when
+     * the launcher went to the background while the work was being prepared, so the fallback runs instead of
+     * dropping the work on the floor.
+     * @param activityRunnable the activity runnable
+     * @param whenMissing run when no foreground activity is available, null to drop the runnable
+     */
+    public static void executeActivity(ActivityRunnable activityRunnable, Runnable whenMissing) {
         Tools.runOnUiThread(()->{
             Activity activity = Tools.getWeakReference(sActivity);
             if(activity != null) activityRunnable.executeWithActivity(activity);
+            else if(whenMissing != null) whenMissing.run();
         });
     }
 

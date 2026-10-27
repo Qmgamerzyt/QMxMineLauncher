@@ -16,6 +16,8 @@ import git.artdeell.mojo.modding.modpacks.models.SearchCategory;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
 
+import git.artdeell.mojo.utils.DownloadStop;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
@@ -83,12 +85,15 @@ public interface ModpackApi {
     default void handleModpackInstallation(Context context, ModDetail modDetail, int selectedVersion) {
         // Doing this here since when starting installation, the progress does not start immediately
         // which may lead to two concurrent installations (very bad)
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.global_waiting);
+        DownloadStop.beginWork();
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
         MojoApplication.sExecutorService.execute(() -> {
             try {
                 installModpack(modDetail, selectedVersion);
             }catch (IOException e) {
                 Tools.showErrorRemote(context, R.string.modpack_install_download_failed, e);
+            }finally {
+                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
             }
         });
     }

@@ -55,6 +55,7 @@ import git.artdeell.mojo.instances.Instance;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutorTask;
 import git.artdeell.mojo.utils.HashUtils;
+import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.maven.MavenName;
 import git.artdeell.mojo.utils.maven.MavenNameAdapter;
 import git.artdeell.mojo.utils.memory.MemoryHoleFinder;
@@ -366,6 +367,8 @@ public final class Tools {
     }
 
     private static void showError(final Context ctx, final int titleId, final String rolledMessage, final Throwable e, final boolean exitIfOk, final boolean showMore) {
+        // The stop button ends work on purpose, it has no fault to report
+        if(DownloadStop.isStopped(e)) return;
         if(e instanceof ContextExecutorTask) {
             ContextExecutor.execute((ContextExecutorTask) e);
             return;
@@ -428,6 +431,8 @@ public final class Tools {
         // abstraction?
 
         // Add your Context-related rage here
+        // The stop button ends work on purpose, it has no fault to report
+        if(DownloadStop.isStopped(e)) return;
         ContextExecutor.execute(new ShowErrorActivity.RemoteErrorTask(e, rolledMessage));
     }
 

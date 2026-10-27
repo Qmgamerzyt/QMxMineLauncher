@@ -15,6 +15,7 @@ import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.imagecache.ModIconCache;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.progresskeeper.DownloaderProgressWrapper;
+import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.DownloadUtils;
 import git.artdeell.mojo.utils.FileUtils;
 
@@ -25,6 +26,7 @@ import java.util.Locale;
 public class ModpackInstaller {
 
     public static LoaderInstaller installModpack(String modpackName, String title, File modpackFile, String icon, InstallFunction installFunction) throws IOException {
+        DownloadStop.checkWork();
         // Build a new minecraft instance, folder first
         LoaderInstaller loaderInstaller;
         Instance instance = Instances.createInstance(i-> i.name = title, modpackName.substring(0, Math.min(16,modpackName.length())));
@@ -63,6 +65,7 @@ public class ModpackInstaller {
     }
 
     public static LoaderInstaller downloadModpack(ModDetail modDetail, int selectedVersion, InstallFunction installFunction) throws IOException {
+        DownloadStop.checkWork();
         String versionUrl = modDetail.versionUrls[selectedVersion];
         String versionHash = modDetail.versionHashes[selectedVersion];
         String modpackName = FileUtils.escapeFileName(modDetail.title.toLowerCase(Locale.ROOT) + " " + modDetail.versionNames[selectedVersion]);
@@ -83,7 +86,7 @@ public class ModpackInstaller {
         try {
             DownloadUtils.ensureSha1(modpackFile, versionHash, () -> {
                 DownloadUtils.downloadFileMonitored(versionUrl, modpackFile, downloadBuffer,
-                        new DownloaderProgressWrapper(R.string.modpack_download_downloading_metadata,
+                        new DownloaderProgressWrapper(R.string.modpack_download_downloading_pack,
                                 ProgressLayout.INSTALL_MODPACK
                         )
                 );

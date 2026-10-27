@@ -12,6 +12,7 @@ import git.artdeell.mojo.modding.modpacks.models.ContentIndex;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
+import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 import git.artdeell.mojo.utils.profiles.InstanceVersions;
 
@@ -128,7 +129,8 @@ public class DependencyResolver {
      */
     public static List<String> installAll(Context context, ModpackApi api, Instance instance,
                                           ModDetail detail, int selectedVersion,
-                                          Map<String, String> titles, Set<String> approvedOptional) {
+                                          Map<String, String> titles, Set<String> approvedOptional)
+            throws IOException {
         try {
             return walk(context, api, instance, detail, selectedVersion, titles, approvedOptional);
         } catch (RuntimeException e) {
@@ -143,7 +145,8 @@ public class DependencyResolver {
 
     private static List<String> walk(Context context, ModpackApi api, Instance instance,
                                      ModDetail detail, int selectedVersion,
-                                     Map<String, String> titles, Set<String> approvedOptional) {
+                                     Map<String, String> titles, Set<String> approvedOptional)
+            throws IOException {
         ArrayList<String> reports = new ArrayList<>();
         if(!detail.kind.installsIntoExistingInstance()) return reports;
         String mcVersion = InstanceVersions.resolveGameVersion(instance.versionId);
@@ -158,6 +161,7 @@ public class DependencyResolver {
         while(!pending.isEmpty() && placed < MAX_DEPENDENCIES) {
             for(ContentDependency dependency : pending.removeFirst()) {
                 if(placed >= MAX_DEPENDENCIES) break;
+                DownloadStop.checkWork();
                 // An optional project is only brought when it was offered and ticked,
                 // and one that turns up as required further down comes regardless
                 if(!dependency.required && (approvedOptional == null
@@ -180,6 +184,9 @@ public class DependencyResolver {
                         pending.add(dependencyDetail.dependenciesOf(versionIndex));
                     }
                 } catch (IOException | RuntimeException e) {
+                    // A stop is the player speaking, not a project that failed, so it
+                    // ends the walk instead of joining the report
+                    if(DownloadStop.isStopped(e)) throw e;
                     missed.put(key(dependency), dependency);
                 }
             }

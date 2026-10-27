@@ -11,11 +11,14 @@ import git.artdeell.mojo.R;
  * https://api.curseforge.com/v1/categories?gameId=432
  */
 public enum ContentKind {
-    MOD("mod", 6, "mods", R.string.content_tab_mods),
-    RESOURCE_PACK("resourcepack", 12, "resourcepacks", R.string.content_tab_resource_packs),
-    SHADER("shader", 6552, "shaderpacks", R.string.content_tab_shaders),
-    WORLD(null, 17, "saves", R.string.content_tab_worlds),
-    MODPACK("modpack", 4471, null, R.string.content_tab_modpacks);
+    MOD("mod", 6, "mods", R.string.content_tab_mods, R.string.content_download_mod),
+    RESOURCE_PACK("resourcepack", 12, "resourcepacks", R.string.content_tab_resource_packs,
+            R.string.content_download_resource_pack),
+    SHADER("shader", 6552, "shaderpacks", R.string.content_tab_shaders,
+            R.string.content_download_shader),
+    WORLD(null, 17, "saves", R.string.content_tab_worlds, R.string.content_download_world),
+    MODPACK("modpack", 4471, null, R.string.content_tab_modpacks,
+            R.string.modpack_download_downloading_pack);
 
     /** Value of the Modrinth project_type facet, null when Modrinth does not host the kind. */
     public final String modrinthType;
@@ -25,12 +28,16 @@ public enum ContentKind {
     public final String folder;
     /** Name of the kind, shared by the tab row and the installed content list. */
     public final int labelRes;
+    /** How the progress row reads while one file of this kind is downloaded. */
+    public final int downloadProgressRes;
 
-    ContentKind(String modrinthType, int curseforgeClassId, String folder, int labelRes) {
+    ContentKind(String modrinthType, int curseforgeClassId, String folder, int labelRes,
+                int downloadProgressRes) {
         this.modrinthType = modrinthType;
         this.curseforgeClassId = curseforgeClassId;
         this.folder = folder;
         this.labelRes = labelRes;
+        this.downloadProgressRes = downloadProgressRes;
     }
 
     /** Whether Modrinth is able to answer a search for this kind. */
