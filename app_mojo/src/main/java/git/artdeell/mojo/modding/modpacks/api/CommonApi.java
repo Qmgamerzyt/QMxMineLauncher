@@ -15,7 +15,9 @@ import git.artdeell.mojo.modding.modpacks.models.SearchResult;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.zip.ZipEntry;
@@ -178,9 +180,12 @@ public class CommonApi implements ModpackApi {
             totalSize += array.length;
         }
 
-        ModItem[] fusedItems = new ModItem[totalSize];
+        ArrayList<ModItem> fusedItems = new ArrayList<>(totalSize);
 
-        int mergedIndex = 0;
+        // Every title already offered, so the same project arriving from both providers
+        // shows up once. The apis are queried in order, which gives the first one in the
+        // list the entry whenever both hosts carry the same title.
+        HashSet<String> seenTitles = new HashSet<>();
         int maxLength = 0;
 
         // Find the maximum length of arrays
@@ -194,13 +199,20 @@ public class CommonApi implements ModpackApi {
         for (int i = 0; i < maxLength; i++) {
             for (ModItem[] matrix : modMatrix) {
                 if (i < matrix.length) {
-                    fusedItems[mergedIndex] = matrix[i];
-                    mergedIndex++;
+                    ModItem item = matrix[i];
+                    if(!seenTitles.add(normalizeTitle(item.title))) continue;
+                    fusedItems.add(item);
                 }
             }
         }
 
-        return fusedItems;
+        return fusedItems.toArray(new ModItem[0]);
+    }
+
+    /** Titles compare case insensitively and without the punctuation providers add for flair */
+    private static String normalizeTitle(String title) {
+        if(title == null) return "";
+        return title.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
     }
 
     private void cancelAllFutures(Future<?>[] futures) {
