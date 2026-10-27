@@ -88,6 +88,8 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     public static final String ARG_KIND = "kind";
     /** Argument carrying the Minecraft version to filter by, usually the instance's own. */
     public static final String ARG_MC_VERSION = "mc_version";
+    /** Argument carrying the loader to filter by, usually the instance's own. */
+    public static final String ARG_LOADER = "loader";
 
     private final SearchFilters mSearchFilters;
     private TextView[] mTabViews;
@@ -269,6 +271,8 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             }
             String mcVersion = arguments.getString(ARG_MC_VERSION);
             if(mcVersion != null && !mcVersion.isEmpty()) mSearchFilters.mcVersion = mcVersion;
+            String loader = arguments.getString(ARG_LOADER);
+            if(loader != null) mSearchFilters.loader = SearchLoader.fromName(loader).name();
         }
         mTabViews = new TextView[] {
                 bindTab(view, R.id.search_tab_mod, ContentKind.MOD),

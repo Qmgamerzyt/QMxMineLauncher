@@ -9,13 +9,17 @@ public class ModDetail extends ModItem {
     /* A cheap way to map from the front facing name to the underlying id */
     public String[] versionNames;
     public String [] mcVersionNames;
+    /* Loaders a version was published for, several of them joined by a comma, empty when the host does not say */
+    public String[] loaderNames;
     public String[] versionUrls;
     /* SHA 1 hashes, null if a hash is unavailable */
     public String[] versionHashes;
-    public ModDetail(ModItem item, String[] versionNames, String[] mcVersionNames, String[] versionUrls, String[] hashes) {
+    public ModDetail(ModItem item, String[] versionNames, String[] mcVersionNames,
+                     String[] loaderNames, String[] versionUrls, String[] hashes) {
         super(item.apiSource, item.kind, item.id, item.title, item.description, item.imageUrl);
         this.versionNames = versionNames;
         this.mcVersionNames = mcVersionNames;
+        this.loaderNames = loaderNames;
         this.versionUrls = versionUrls;
         this.versionHashes = hashes;
 
@@ -24,6 +28,49 @@ public class ModDetail extends ModItem {
             if (!versionNames[i].contains(mcVersionNames[i]))
                 versionNames[i] += " - " + mcVersionNames[i];
         }
+    }
+
+    /**
+     * The version an instance should be offered first, so the one that suits it is
+     * already sitting in the spinner. A version carrying both the Minecraft version
+     * and the loader of the instance wins, then one carrying the Minecraft version,
+     * and the newest of the list stands in when nothing lines up.
+     *
+     * @param mcVersion  the Minecraft version the instance runs, or null when unknown
+     * @param loaderName the loader the instance runs on, or null when unknown
+     * @return the index into versionNames to start the spinner at
+     */
+    public int bestVersionIndex(String mcVersion, String loaderName) {
+        boolean wantMcVersion = mcVersion != null && !mcVersion.isEmpty();
+        // A search for any loader has no version to favour on that account
+        boolean wantLoader = loaderName != null && !loaderName.isEmpty()
+                && !"ANY".equalsIgnoreCase(loaderName);
+        int bestIndex = 0;
+        int bestScore = -1;
+        for(int i = 0; i < versionNames.length; i++) {
+            int score = 0;
+            if(wantMcVersion && i < mcVersionNames.length
+                    && mcVersion.equals(mcVersionNames[i])) score += 2;
+            if(wantLoader && holdsLoader(i, loaderName)) score += 1;
+            if(score > bestScore) {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
+    /** Whether one version was published for the given loader, matched without case. */
+    private boolean holdsLoader(int index, String loaderName) {
+        if(loaderNames == null || index >= loaderNames.length) return false;
+        String declared = loaderNames[index];
+        if(declared == null || declared.isEmpty()) return false;
+        for(String loader : declared.split(",")) {
+            String trimmed = loader.trim();
+            // A file published for any loader goes with whichever one the instance runs
+            if("ANY".equalsIgnoreCase(trimmed) || loaderName.equalsIgnoreCase(trimmed)) return true;
+        }
+        return false;
     }
 
     @NonNull

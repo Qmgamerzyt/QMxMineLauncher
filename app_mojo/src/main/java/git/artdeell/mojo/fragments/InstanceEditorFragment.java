@@ -21,7 +21,9 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 
+import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.extra.ExtraConstants;
@@ -35,6 +37,7 @@ import git.artdeell.mojo.multirt.Runtime;
 import git.artdeell.mojo.instances.InstanceIconProvider;
 import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
+import git.artdeell.mojo.utils.profiles.InstanceVersions;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.utils.CropperUtils;
 
@@ -200,11 +203,22 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
             manage.setOnClickListener(v ->
                     InstalledContent.showListFor(requireContext().getApplicationContext(), instance, kind));
             browse.setOnClickListener(v -> {
-                Bundle bundle = new Bundle(2);
+                Bundle bundle = new Bundle(3);
                 bundle.putString(SearchModFragment.ARG_KIND, kind.name());
-                bundle.putString(SearchModFragment.ARG_MC_VERSION, instance.versionId);
-                Tools.swapFragment(requireActivity(), SearchModFragment.class,
-                        SearchModFragment.TAG, bundle);
+                FragmentActivity activity = requireActivity();
+                String versionId = instance.versionId;
+                // Reading the profile of the instance belongs off the UI thread, so
+                // the search screen is opened once the version it runs has been read
+                MojoApplication.sExecutorService.execute(() -> {
+                    String gameVersion = InstanceVersions.resolveGameVersion(versionId);
+                    String loader = InstanceVersions.resolveLoader(versionId).name();
+                    activity.runOnUiThread(() -> {
+                        bundle.putString(SearchModFragment.ARG_MC_VERSION, gameVersion);
+                        bundle.putString(SearchModFragment.ARG_LOADER, loader);
+                        Tools.swapFragment(activity, SearchModFragment.class,
+                                SearchModFragment.TAG, bundle);
+                    });
+                });
             });
             mContentRows.addView(row);
         }

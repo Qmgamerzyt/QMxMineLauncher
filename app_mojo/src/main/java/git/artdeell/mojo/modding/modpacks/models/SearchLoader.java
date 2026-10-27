@@ -39,4 +39,13 @@ public enum SearchLoader {
         }
         return ANY;
     }
+
+    /** The loader a CurseForge code stands for, or ANY when the code is not one of them. */
+    public static SearchLoader fromCurseforgeCode(int code) {
+        if(code == 0) return ANY;
+        for(SearchLoader loader : values()) {
+            if(loader != ANY && loader.curseforgeCode == code) return loader;
+        }
+        return ANY;
+    }
 }

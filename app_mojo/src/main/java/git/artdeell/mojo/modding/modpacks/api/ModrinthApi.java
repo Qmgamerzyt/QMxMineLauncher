@@ -163,20 +163,31 @@ public class ModrinthApi implements ModpackApi{
 
         JsonArray response = mApiHandler.get(String.format("project/%s/version", item.id), JsonArray.class);
         if(response == null) return null;
-        System.out.println(response);
         String[] names = new String[response.size()];
         String[] mcNames = new String[response.size()];
+        String[] loaders = new String[response.size()];
         String[] urls = new String[response.size()];
         String[] hashes = new String[response.size()];
 
         for (int i=0; i<response.size(); ++i) {
             JsonObject version = response.get(i).getAsJsonObject();
-            names[i] = version.get("name").getAsString();
-            mcNames[i] = version.get("game_versions").getAsJsonArray().get(0).getAsString();
-            urls[i] = version.get("files").getAsJsonArray().get(0).getAsJsonObject().get("url").getAsString();
+            names[i] = readString(version, "name");
+            // A version may name several Minecraft versions and several loaders, the
+            // first of each is the one the row is written for, the rest is kept for
+            // matching the instance against the list
+            mcNames[i] = readArrayFirst(version, "game_versions");
+            loaders[i] = readJoinedArray(version, "loaders");
+            JsonArray files = version.getAsJsonArray("files");
+            urls[i] = files != null && !files.isEmpty() && files.get(0).isJsonObject()
+                    ? readString(files.get(0).getAsJsonObject(), "url") : null;
             // Assume there may not be hashes, in case the API changes
-            JsonObject hashesMap = version.getAsJsonArray("files").get(0).getAsJsonObject()
-                    .get("hashes").getAsJsonObject();
+            if(files == null || files.isEmpty() || !files.get(0).isJsonObject()) {
+                hashes[i] = null;
+                continue;
+            }
+            JsonObject hashesMap = files.get(0).getAsJsonObject().get("hashes") != null
+                    && files.get(0).getAsJsonObject().get("hashes").isJsonObject()
+                    ? files.get(0).getAsJsonObject().getAsJsonObject("hashes") : null;
             if(hashesMap == null || hashesMap.get("sha1") == null){
                 hashes[i] = null;
                 continue;
@@ -185,7 +196,54 @@ public class ModrinthApi implements ModpackApi{
             hashes[i] = hashesMap.get("sha1").getAsString();
         }
 
-        return new ModDetail(item, names, mcNames, urls, hashes);
+        return new ModDetail(item, names, mcNames, loaders, urls, hashes);
+    }
+
+    /** The value of a string field, or an empty string when it is missing or not a string. */
+    private static String readString(JsonObject object, String key) {
+        if(object == null || !object.has(key) || object.get(key).isJsonNull()) return "";
+        try {
+            return object.get(key).getAsString();
+        }catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** An array field, or null when it is missing or holds something else. */
+    private static JsonArray readArray(JsonObject object, String key) {
+        if(object == null || !object.has(key) || !object.get(key).isJsonArray()) return null;
+        return object.getAsJsonArray(key);
+    }
+
+    /** The first entry of a string array field, or an empty string when there is none. */
+    private static String readArrayFirst(JsonObject object, String key) {
+        JsonArray array = readArray(object, key);
+        if(array == null || array.isEmpty() || array.get(0).isJsonNull()) return "";
+        try {
+            return array.get(0).getAsString();
+        }catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    /** Every entry of a string array field joined by a comma, or an empty string. */
+    private static String readJoinedArray(JsonObject object, String key) {
+        JsonArray array = readArray(object, key);
+        if(array == null || array.isEmpty()) return "";
+        StringBuilder joined = new StringBuilder();
+        for(JsonElement element : array) {
+            if(element.isJsonNull()) continue;
+            String value;
+            try {
+                value = element.getAsString();
+            }catch (RuntimeException e) {
+                continue;
+            }
+            if(value.isEmpty()) continue;
+            if(joined.length() > 0) joined.append(',');
+            joined.append(value);
+        }
+        return joined.toString();
     }
 
     @Override

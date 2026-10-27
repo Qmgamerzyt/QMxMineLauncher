@@ -166,28 +166,40 @@ public class CurseforgeApi implements ModpackApi{
         int length = allModDetails.size();
         String[] versionNames = new String[length];
         String[] mcVersionNames = new String[length];
+        String[] loaderNames = new String[length];
         String[] versionUrls = new String[length];
         String[] hashes = new String[length];
         for(int i = 0; i < allModDetails.size(); i++) {
             JsonObject modDetail = allModDetails.get(i);
-            versionNames[i] = modDetail.get("displayName").getAsString();
+            String displayName = GsonJsonUtils.getStringSafe(modDetail, "displayName");
+            versionNames[i] = displayName == null ? "" : displayName;
 
+            // A removed or server only file carries no link at all, the installer
+            // reports that when such a version ends up being the one picked
             JsonElement downloadUrl = modDetail.get("downloadUrl");
-            versionUrls[i] = downloadUrl.getAsString();
+            versionUrls[i] = downloadUrl == null || downloadUrl.isJsonNull() ? null : downloadUrl.getAsString();
 
-            JsonArray gameVersions = modDetail.getAsJsonArray("gameVersions");
-            for(JsonElement jsonElement : gameVersions) {
-                String gameVersion = jsonElement.getAsString();
-                if(!sMcVersionPattern.matcher(gameVersion).matches()) {
-                    continue;
+            mcVersionNames[i] = "";
+            JsonArray gameVersions = GsonJsonUtils.getJsonArraySafe(modDetail, "gameVersions");
+            if(gameVersions != null) {
+                for(JsonElement jsonElement : gameVersions) {
+                    String gameVersion = jsonElement.getAsString();
+                    if(!sMcVersionPattern.matcher(gameVersion).matches()) {
+                        continue;
+                    }
+                    mcVersionNames[i] = gameVersion;
+                    break;
                 }
-                mcVersionNames[i] = gameVersion;
-                break;
             }
+
+            // CurseForge marks the loader a file was built for with a code of its own,
+            // zero standing for a file that goes with any of them
+            loaderNames[i] = SearchLoader.fromCurseforgeCode(
+                    GsonJsonUtils.getIntSafe(modDetail, "modLoader", 0)).name();
 
             hashes[i] = getSha1FromModData(modDetail);
         }
-        return new ModDetail(item, versionNames, mcVersionNames, versionUrls, hashes);
+        return new ModDetail(item, versionNames, mcVersionNames, loaderNames, versionUrls, hashes);
     }
 
     @Override

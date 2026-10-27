@@ -281,6 +281,13 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 mExtendedErrorTextView.setVisibility(View.GONE);
                 mVersionAdapter.setObjects(Arrays.asList(detailedItem.versionNames));
                 mExtendedSpinner.setAdapter(mVersionAdapter);
+                // The version the instance can run is the one the list starts on, so
+                // an install lands on a fitting file without searching through it
+                SearchFilters filters = mSearchFilters;
+                if(filters != null) {
+                    mExtendedSpinner.setSelection(detailedItem.bestVersionIndex(
+                            filters.mcVersion, filters.loader));
+                }
             } else {
                 closeDetailedView();
                 setInstallEnabled(false);
