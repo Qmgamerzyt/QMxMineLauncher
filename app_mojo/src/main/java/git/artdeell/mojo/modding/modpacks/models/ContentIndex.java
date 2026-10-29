@@ -31,6 +31,8 @@ public class ContentIndex {
         public String fileName;
         public String title;
         public String versionName;
+        /** Picture the provider shows for the project, null when it is not known. */
+        public String iconUrl;
     }
 
     public static File location(File gameDirectory) {
@@ -88,9 +90,11 @@ public class ContentIndex {
     /**
      * Write down what this project placed into the instance, keeping the entry that
      * already describes it so a repeat install stays a single row.
+     *
+     * @param iconUrl picture of the project, null when the source is the device
      */
     public void record(ContentKind kind, int apiSource, String projectId, String fileName,
-                       String title, String versionName) {
+                       String title, String versionName, String iconUrl) {
         Entry entry = find(kind, apiSource, projectId);
         if(entry == null) {
             entry = new Entry();
@@ -102,5 +106,6 @@ public class ContentIndex {
         entry.fileName = fileName;
         entry.title = title;
         entry.versionName = versionName;
+        entry.iconUrl = iconUrl;
     }
 }

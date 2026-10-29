@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Key a row's picture view is tagged with, so a late picture finds its own row -->
+    <item name="content_thumb_tag" type="id" />
+</resources>

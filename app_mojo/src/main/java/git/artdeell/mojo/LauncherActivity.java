@@ -37,7 +37,9 @@ import git.artdeell.mojo.instances.InstanceInstaller;
 import git.artdeell.mojo.instances.Instances;
 import git.artdeell.mojo.utils.lifecycle.ContextAwareDoneListener;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
+import git.artdeell.mojo.modding.modpacks.api.ContentNavigation;
 import git.artdeell.mojo.modding.modpacks.imagecache.IconCacheJanitor;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.prefs.screens.LauncherPreferenceFragment;
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
@@ -202,6 +204,30 @@ public class LauncherActivity extends BaseActivity {
         mProgressLayout.observe(ProgressLayout.DOWNLOAD_VERSION_LIST);
         mProgressLayout.observe(ProgressLayout.INSTANCE_INSTALL);
         mProgressLayout.observe(ProgressLayout.DATA_MIGRATION);
+
+        handleContentKindIntent(getIntent());
+    }
+
+    /**
+     * A browse started from the game drawer arrives here, since that drawer cannot
+     * hold the content screen itself. The screen the launcher is on is replaced by
+     * the one for the kind that was asked for.
+     */
+    private void handleContentKindIntent(Intent intent) {
+        if(intent == null) return;
+        String kindName = intent.getStringExtra(ContentNavigation.EXTRA_CONTENT_KIND);
+        if(kindName == null) return;
+        intent.removeExtra(ContentNavigation.EXTRA_CONTENT_KIND);
+        ContentKind kind;
+        try {
+            kind = ContentKind.valueOf(kindName);
+        }catch (IllegalArgumentException e) {
+            return;
+        }
+        mFragmentView.post(() -> {
+            Instance instance = Instances.loadSelectedInstance();
+            ContentNavigation.open(this, instance, kind);
+        });
     }
 
     @Override

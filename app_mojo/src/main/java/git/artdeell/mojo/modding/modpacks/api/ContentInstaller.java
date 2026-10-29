@@ -1,6 +1,8 @@
 package git.artdeell.mojo.modding.modpacks.api;
 
 import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -24,11 +26,15 @@ import git.artdeell.mojo.utils.ZipUtils;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -93,15 +99,18 @@ public class ContentInstaller {
     }
 
     /**
-     * Put a world archive that the user picked from their own storage into an instance.
-     * The archive is owned by this call and is removed once the install is over.
+     * Put files the player picked from their own storage into an instance, one instance
+     * asked for the whole batch. Every file is copied into the cache first, since the
+     * picker hands out content that may live anywhere, then it lands in the folder of
+     * its kind or, for a world, is unpacked into the saves folder.
      *
-     * @param context used to report errors
-     * @param archive the archive that was picked
-     * @param archiveName the name the archive was picked under
+     * @param context used to report errors and to ask which instance takes the files
+     * @param kind    the kind the content screen is on
+     * @param files   the picked files, each carrying the name it was picked under
      */
-    public static void handleLocalWorldArchive(Context context, File archive, String archiveName) {
-        String worldName = worldNameFor(FileUtils.removeExtension(archiveName));
+    public static void handleLocalFiles(Context context, ContentKind kind, List<PickedFile> files) {
+        if(files == null || files.isEmpty()) return;
+        if(kind == null || !kind.installsIntoExistingInstance()) return;
         DownloadStop.beginWork();
         ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
         MojoApplication.sExecutorService.execute(() -> {
@@ -110,18 +119,180 @@ public class ContentInstaller {
                 Instance selected = Instances.loadSelectedInstance();
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
-                        instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
-                                in -> installLocalWorld(in, archive, worldName), null))),
-                        () -> {
-                            archive.delete();
-                            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
-                        });
+                        instance -> MojoApplication.sExecutorService.execute(() ->
+                                placePicked(context, instance, kind, files))),
+                        () -> ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK));
             }catch (IOException e) {
-                archive.delete();
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
             }
         });
+    }
+
+    /**
+     * The same batch of picked files, for a caller that already knows which instance
+     * takes them. The game drawer asks this way, since it runs the instance it is on.
+     *
+     * @param context  used to report errors
+     * @param instance the instance the files are placed into
+     * @param kind     the kind the files were picked for
+     * @param files    the picked files, each carrying the name it was picked under
+     */
+    public static void handleLocalFilesInto(Context context, Instance instance, ContentKind kind,
+                                            List<PickedFile> files) {
+        if(files == null || files.isEmpty() || instance == null) return;
+        if(kind == null || !kind.installsIntoExistingInstance()) return;
+        DownloadStop.beginWork();
+        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
+        MojoApplication.sExecutorService.execute(() -> placePicked(context, instance, kind, files));
+    }
+
+    /**
+     * Copy every picked file into the instance and write down what landed there. A file
+     * that does not belong in the folder of its kind is left out rather than placed, so
+     * the game is never handed something it cannot read.
+     */
+    private static void placePicked(Context context, Instance instance, ContentKind kind,
+                                    List<PickedFile> files) {
+        int placed = 0;
+        int leftOut = 0;
+        IOException failure = null;
+        try {
+            File gameDirectory = instance.getGameDirectory();
+            File destination = new File(gameDirectory, kind.folder);
+            FileUtils.ensureDirectory(destination);
+            ContentIndex index = ContentIndex.read(gameDirectory);
+            for(int i = 0; i < files.size(); i++) {
+                DownloadStop.checkWork();
+                PickedFile picked = files.get(i);
+                ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK,
+                        (int)(i * 100L / files.size()), R.string.content_install_copying_n,
+                        i + 1, files.size());
+                if(!accepts(kind, picked.name)) {
+                    leftOut++;
+                    continue;
+                }
+                File staged = null;
+                try {
+                    staged = stage(context, picked);
+                    String title = FileUtils.removeExtension(picked.name);
+                    if(kind == ContentKind.WORLD) {
+                        File world = unpackWorld(staged, destination, worldNameFor(title));
+                        index.record(kind, ContentIndex.SOURCE_LOCAL, world.getName(),
+                                world.getName(), title, null, null);
+                    }else {
+                        String fileName = targetName(kind, picked.name);
+                        File placedFile = new File(destination, fileName);
+                        if(placedFile.exists() && !placedFile.delete())
+                            throw new IOException("Could not replace " + fileName);
+                        org.apache.commons.io.FileUtils.moveFile(staged, placedFile);
+                        index.record(kind, ContentIndex.SOURCE_LOCAL, fileName, fileName,
+                                title, null, null);
+                    }
+                    placed++;
+                }catch (IOException e) {
+                    // One file going wrong leaves the rest of the batch to carry on
+                    if(DownloadStop.isStopped(e)) throw e;
+                    if(failure == null) failure = e;
+                    Log.w("ContentInstaller", "Could not import " + picked.name, e);
+                }finally {
+                    if(staged != null && staged.exists()) staged.delete();
+                }
+            }
+            index.write(gameDirectory);
+        }catch (IOException e) {
+            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            Tools.showErrorRemote(context, R.string.content_install_failed, e);
+            return;
+        }
+        ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+        reportPicked(context, instance, kind, placed, leftOut, failure);
+    }
+
+    /** Copy one picked file into the cache under a name of its own. */
+    private static File stage(Context context, PickedFile picked) throws IOException {
+        String safeName = FileUtils.escapeFileName(picked.name);
+        if(safeName.isEmpty() || safeName.equals(".") || safeName.equals("..")) safeName = "content";
+        File staged = new File(Tools.DIR_CACHE, "pick_" + System.nanoTime() + "_" + safeName);
+        FileUtils.ensureParentDirectory(staged);
+        try(InputStream input = context.getContentResolver().openInputStream(picked.uri);
+            OutputStream output = new FileOutputStream(staged)) {
+            if(input == null) throw new IOException("Could not read " + picked.name);
+            DownloadUtils.copyCancellable(input, output);
+            output.flush();
+        }catch (IOException e) {
+            staged.delete();
+            throw e;
+        }
+        return staged;
+    }
+
+    /** Whether a file picked under this name may be placed in the folder of the kind. */
+    private static boolean accepts(ContentKind kind, String name) {
+        String lower = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        switch (kind) {
+            case MOD: return lower.endsWith(".jar");
+            case RESOURCE_PACK: return lower.endsWith(".zip") || lower.endsWith(".mcpack");
+            case SHADER: return lower.endsWith(".zip");
+            case WORLD: return lower.endsWith(".zip") || lower.endsWith(".mcpack");
+            default: return false;
+        }
+    }
+
+    /** The name the file gets inside the folder of the kind, packs renamed to a zip. */
+    private static String targetName(ContentKind kind, String name) {
+        String safe = FileUtils.escapeFileName(name);
+        if(kind == ContentKind.RESOURCE_PACK && safe.toLowerCase(Locale.ROOT).endsWith(".mcpack"))
+            safe = safe.substring(0, safe.length() - ".mcpack".length()) + ".zip";
+        if(safe.isEmpty() || safe.equals(".") || safe.equals("..")) safe = "content";
+        return safe;
+    }
+
+    /** Say how much of the batch made it, and when nothing did, what stood in the way. */
+    private static void reportPicked(Context context, Instance instance, ContentKind kind,
+                                     int placed, int leftOut, IOException failure) {
+        Context appContext = context.getApplicationContext();
+        if(placed == 0) {
+            StringBuilder message = new StringBuilder(leftOut > 0
+                    ? appContext.getString(R.string.content_import_skipped, leftOut,
+                        appContext.getString(kind.labelRes))
+                    : appContext.getString(R.string.content_import_none));
+            if(failure != null) {
+                String reason = failure.getMessage();
+                if(reason == null || reason.isEmpty()) reason = failure.getClass().getSimpleName();
+                message.append('\n').append(reason);
+            }
+            String text = message.toString();
+            Tools.runOnUiThread(() -> new AlertDialog.Builder(appContext)
+                    .setTitle(R.string.content_import_local_file)
+                    .setMessage(text)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show());
+            return;
+        }
+        String done = appContext.getString(R.string.content_import_done, placed,
+                instance.displayName());
+        Tools.runOnUiThread(() -> Toast.makeText(appContext, done, Toast.LENGTH_LONG).show());
+        if(leftOut > 0) {
+            String skipped = appContext.getString(R.string.content_import_skipped, leftOut,
+                    appContext.getString(kind.labelRes));
+            Tools.runOnUiThread(() -> Toast.makeText(appContext, skipped, Toast.LENGTH_LONG).show());
+        }
+    }
+
+    /**
+     * A file the player picked from their own storage, carried with the name the picker
+     * showed for it. The launcher reads it through the picker while it makes a copy, so
+     * nothing of it is kept beyond that.
+     */
+    public static final class PickedFile {
+        public final Uri uri;
+        public final String name;
+
+        public PickedFile(Uri uri, String name) {
+            this.uri = uri;
+            this.name = name == null || name.isEmpty() ? "content" : name;
+        }
     }
 
     /**
@@ -253,31 +424,11 @@ public class ContentInstaller {
                 org.apache.commons.io.FileUtils.moveFile(staged, placed);
             }
             index.record(kind, detail.apiSource, detail.id, placed.getName(), detail.title,
-                    detail.versionNames[selectedVersion]);
+                    detail.versionNames[selectedVersion], detail.imageUrl);
             index.write(gameDirectory);
             return placed;
         }finally {
             staged.delete();
-        }
-    }
-
-    /**
-     * Unpack a world archive the user picked from their own storage into the saves
-     * folder of an instance and write it down in that instance's index.
-     */
-    private static File installLocalWorld(Instance instance, File archive, String worldName) throws IOException {
-        try {
-            File gameDirectory = instance.getGameDirectory();
-            File saves = new File(gameDirectory, ContentKind.WORLD.folder);
-            FileUtils.ensureDirectory(saves);
-            File placed = unpackWorld(archive, saves, worldName);
-            ContentIndex index = ContentIndex.read(gameDirectory);
-            index.record(ContentKind.WORLD, ContentIndex.SOURCE_LOCAL, worldName,
-                    placed.getName(), worldName, null);
-            index.write(gameDirectory);
-            return placed;
-        }finally {
-            archive.delete();
         }
     }
 

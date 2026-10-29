@@ -2,6 +2,8 @@ package git.artdeell.mojo.modding.modpacks.models;
 
 import git.artdeell.mojo.R;
 
+import java.util.ArrayList;
+
 /**
  * The kind of game content a search or an install works with. Every kind carries the
  * identifiers that Modrinth and CurseForge use for it, plus the folder inside an
@@ -64,5 +66,25 @@ public enum ContentKind {
             if(modrinthType.equals(kind.modrinthType)) return kind;
         }
         return null;
+    }
+
+    /**
+     * @return the kinds that land in a folder of an instance, in the order the content
+     *         screens show them
+     */
+    public static ContentKind[] installedKinds() {
+        ArrayList<ContentKind> kinds = new ArrayList<>();
+        for(ContentKind kind : values()) {
+            if(kind.installsIntoExistingInstance()) kinds.add(kind);
+        }
+        return kinds.toArray(new ContentKind[0]);
+    }
+
+    /**
+     * @return the kinds a running game reads from the disk again on its own. Mods are
+     *         left out, the game only looks at its mods folder when it starts
+     */
+    public static ContentKind[] liveKinds() {
+        return new ContentKind[]{RESOURCE_PACK, SHADER, WORLD};
     }
 }

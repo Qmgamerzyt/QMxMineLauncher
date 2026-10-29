@@ -2,6 +2,7 @@ package git.artdeell.mojo.fragments;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -18,10 +19,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
 
 import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
@@ -35,9 +36,11 @@ import git.artdeell.mojo.multirt.MultiRTUtils;
 import git.artdeell.mojo.multirt.RTSpinnerAdapter;
 import git.artdeell.mojo.multirt.Runtime;
 import git.artdeell.mojo.instances.InstanceIconProvider;
+import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
+import git.artdeell.mojo.modding.modpacks.api.ContentNavigation;
 import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
+import git.artdeell.mojo.modding.modpacks.imagecache.ContentThumbnails;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
-import git.artdeell.mojo.utils.profiles.InstanceVersions;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
 import git.artdeell.mojo.utils.CropperUtils;
 
@@ -60,6 +63,27 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
     private CheckBox mSharedDataCheckbox;
     private int mRecommendedIconSize;
     private final ActivityResultLauncher<?> mCropperLauncher = CropperUtils.registerCropper(this, this);
+    /** The kind the open picker is bringing in for, read back once the files arrive. */
+    private ContentKind mPendingImportKind;
+    /** Picks several files at once, all of them for the kind held in the field above. */
+    private final ActivityResultLauncher<String[]> mContentImportLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), uris -> {
+                ContentKind kind = mPendingImportKind;
+                mPendingImportKind = null;
+                Instance target = mInstance;
+                if (uris == null || uris.isEmpty() || kind == null || target == null) return;
+                Context context = getContext();
+                if (context == null) return;
+                Context appContext = context.getApplicationContext();
+                ArrayList<ContentInstaller.PickedFile> picked = new ArrayList<>();
+                for (Uri uri : uris) {
+                    String name = Tools.getFileName(appContext, uri);
+                    if (name != null) picked.add(new ContentInstaller.PickedFile(uri, name));
+                }
+                if (picked.isEmpty()) return;
+                MojoApplication.sExecutorService.execute(() ->
+                        ContentInstaller.handleLocalFilesInto(appContext, target, kind, picked));
+            });
 
     private List<String> mRenderNames;
 
@@ -199,29 +223,25 @@ public class InstanceEditorFragment extends Fragment implements CropperUtils.Cro
             TextView label = row.findViewById(R.id.content_row_label);
             Button manage = row.findViewById(R.id.content_row_manage);
             Button browse = row.findViewById(R.id.content_row_browse);
+            ImageView thumb = row.findViewById(R.id.content_thumb);
             label.setText(kind.labelRes);
+            ContentThumbnails.setPlaceholder(thumb, kind);
             manage.setOnClickListener(v ->
-                    InstalledContent.showListFor(requireContext().getApplicationContext(), instance, kind));
-            browse.setOnClickListener(v -> {
-                Bundle bundle = new Bundle(3);
-                bundle.putString(SearchModFragment.ARG_KIND, kind.name());
-                FragmentActivity activity = requireActivity();
-                String versionId = instance.versionId;
-                // Reading the profile of the instance belongs off the UI thread, so
-                // the search screen is opened once the version it runs has been read
-                MojoApplication.sExecutorService.execute(() -> {
-                    String gameVersion = InstanceVersions.resolveGameVersion(versionId);
-                    String loader = InstanceVersions.resolveLoader(versionId).name();
-                    activity.runOnUiThread(() -> {
-                        bundle.putString(SearchModFragment.ARG_MC_VERSION, gameVersion);
-                        bundle.putString(SearchModFragment.ARG_LOADER, loader);
-                        Tools.swapFragment(activity, SearchModFragment.class,
-                                SearchModFragment.TAG, bundle);
-                    });
-                });
-            });
+                    InstalledContent.showListFor(requireContext().getApplicationContext(), instance, kind,
+                            pickedKind -> startContentImport(pickedKind != null ? pickedKind : kind)));
+            browse.setOnClickListener(v -> ContentNavigation.open(requireActivity(), instance, kind));
             mContentRows.addView(row);
         }
+    }
+
+    /**
+     * Ask for files of one kind and place them into the instance being edited, which
+     * is already known here so the picker does not have to ask where they go.
+     */
+    private void startContentImport(ContentKind kind) {
+        if(kind == null || mInstance == null) return;
+        mPendingImportKind = kind;
+        mContentImportLauncher.launch(new String[]{"*/*"});
     }
 
     private void bindViews(@NonNull View view){

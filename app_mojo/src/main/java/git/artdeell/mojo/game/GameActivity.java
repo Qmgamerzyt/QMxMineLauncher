@@ -18,6 +18,7 @@ import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -35,6 +36,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
@@ -50,6 +53,7 @@ import git.artdeell.mojo.game.renderer.GameRenderer;
 import git.artdeell.mojo.utils.GpuUtils;
 import git.artdeell.mojo.utils.KeycodeUtils;
 import git.artdeell.mojo.Logger;
+import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.authenticator.accounts.Accounts;
 import git.artdeell.mojo.input.ControlButtonMenuListener;
@@ -64,6 +68,10 @@ import git.artdeell.mojo.input.mouse.GyroControl;
 import git.artdeell.mojo.input.mouse.HotbarView;
 import git.artdeell.mojo.instances.Instance;
 import git.artdeell.mojo.instances.Instances;
+import git.artdeell.mojo.modding.modpacks.api.ContentInstaller;
+import git.artdeell.mojo.modding.modpacks.api.ContentNavigation;
+import git.artdeell.mojo.modding.modpacks.api.InstalledContent;
+import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
 import git.artdeell.mojo.game.platform.Platform;
 import git.artdeell.mojo.game.platform.backend.DummyBackend;
@@ -79,6 +87,7 @@ import git.artdeell.mojo.utils.jre.GameRunner;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Objects;
 
 import git.artdeell.mojo.R;
@@ -102,6 +111,26 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
 
     Instance instance;
     Account account;
+
+    /** The kind the open picker is bringing in for, read back once the files arrive. */
+    private ContentKind mContentImportKind;
+    /** Picks several files at once, all of them for the kind held in the field above. */
+    private final ActivityResultLauncher<String[]> mContentImportLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), uris -> {
+                ContentKind kind = mContentImportKind;
+                mContentImportKind = null;
+                Instance target = instance;
+                if (uris == null || uris.isEmpty() || kind == null || target == null) return;
+                ArrayList<ContentInstaller.PickedFile> picked = new ArrayList<>();
+                for (Uri uri : uris) {
+                    String name = Tools.getFileName(this, uri);
+                    if (name != null) picked.add(new ContentInstaller.PickedFile(uri, name));
+                }
+                if (picked.isEmpty()) return;
+                Toast.makeText(this, R.string.content_import_running, Toast.LENGTH_SHORT).show();
+                MojoApplication.sExecutorService.execute(() ->
+                        ContentInstaller.handleLocalFilesInto(this, target, kind, picked));
+            });
 
     private ArrayAdapter<String> gameActionArrayAdapter;
     private AdapterView.OnItemClickListener gameActionClickListener;
@@ -258,6 +287,9 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
                      case 2: dialogSendCustomKey(); break;
                      case 3: openQuickSettings(); break;
                      case 4: openCustomControls(); break;
+                     case 5: dialogContentManage(); break;
+                     case 6: dialogContentImport(); break;
+                     case 7: dialogContentBrowse(); break;
                 }
                 drawerLayout.closeDrawers();
             };
@@ -423,6 +455,31 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         dialog.setTitle(R.string.control_customkey);
         dialog.setItems(KeycodeUtils.generateKeyName(), (dInterface, position) -> KeycodeUtils.execKeyIndex(position));
         dialog.show();
+    }
+
+    /** Look at what the running instance holds of one of the kinds it can pick up while it runs. */
+    private void dialogContentManage() {
+        InstalledContent.chooseKind(this, R.string.ingame_content_manage, ContentKind.liveKinds(),
+                kind -> InstalledContent.showListFor(getApplicationContext(), instance, kind,
+                        this::startContentImport));
+    }
+
+    /** Bring files in from the device, the instance the game runs is already known here. */
+    private void dialogContentImport() {
+        InstalledContent.chooseKind(this, R.string.ingame_content_import, ContentKind.liveKinds(),
+                this::startContentImport);
+    }
+
+    /** Go and fetch content for the running instance, the content screen opens on the chosen kind. */
+    private void dialogContentBrowse() {
+        InstalledContent.chooseKind(this, R.string.main_content_manager, ContentKind.liveKinds(),
+                kind -> ContentNavigation.open(this, instance, kind));
+    }
+
+    private void startContentImport(ContentKind kind) {
+        if (kind == null || instance == null) return;
+        mContentImportKind = kind;
+        mContentImportLauncher.launch(new String[]{"*/*"});
     }
 
     boolean isInEditor;

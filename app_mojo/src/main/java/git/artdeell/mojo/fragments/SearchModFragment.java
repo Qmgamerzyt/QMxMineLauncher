@@ -96,63 +96,74 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
 
     private Button mImportButton;
     private TaskCountListener mTaskCountListener;
+    /** The kind the open picker is bringing in for, read back once the files arrive. */
+    private ContentKind mPendingImportKind;
 
-    ActivityResultLauncher<String> mImportLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(),
-            uri -> {
-                if (uri == null) return;
-                Context context = getContext();
-                ContentResolver contentResolver = getContext().getContentResolver();
-                MojoApplication.sExecutorService.execute(() -> {
-                    performLocalInstall(uri, context, contentResolver);
-                });
-            });
+    ActivityResultLauncher<String[]> mImportLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenMultipleDocuments(), this::onFilesPicked);
 
-    public void performLocalInstall(Uri uri, Context context, ContentResolver contentResolver) {
-            String fileName = Tools.getFileName(context, uri);
-            if (fileName == null) return;
-            DownloadStop.beginWork();
-            if (mSearchFilters.kind == ContentKind.WORLD) {
-                performLocalWorldInstall(uri, fileName, context, contentResolver);
-                return;
-            }
-            File outFile = new File(Tools.DIR_CACHE, fileName + ".cf");
-            ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_copying);
-            try (InputStream inputStream = contentResolver.openInputStream(uri);
-                 OutputStream outputStream = new FileOutputStream(outFile)) {
-                if (inputStream == null) {
-                    ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
-                    return;
-                }
-                DownloadUtils.copyCancellable(inputStream, outputStream);
-                outputStream.flush();
-            } catch (IOException e) {
-                outFile.delete();
-                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
-                Tools.showErrorRemote("Error", e);
-                return;
-            }
-            try {
-                modpackApi.installLocalModpack(fileName, outFile, null);
-            } catch (IOException e) {
-                Tools.showErrorRemote("Error", e);
-            } finally {
-                outFile.delete();
-                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
-            }
+    /** Put the picked files to work, each batch landing as the kind it was picked for. */
+    private void onFilesPicked(List<Uri> uris) {
+        if (uris == null || uris.isEmpty()) return;
+        Context context = getContext();
+        if (context == null) return;
+        // The kind is kept from the moment the picker was opened, the screen
+        // may be on another tab by the time the files are in hand
+        ContentKind kind = mPendingImportKind != null ? mPendingImportKind : mSearchFilters.kind;
+        mPendingImportKind = null;
+        Context appContext = context.getApplicationContext();
+        MojoApplication.sExecutorService.execute(() ->
+                performLocalInstall(new ArrayList<>(uris), kind, appContext));
     }
 
     /**
-     * Copy a world archive from the picker into the cache, then hand it over to the
-     * installer which asks where the world should go.
+     * Open the file picker for one kind, keeping what the picked files are for until
+     * they arrive. Several files can be picked at once, they all land together.
      */
-    private void performLocalWorldInstall(Uri uri, String fileName, Context context, ContentResolver contentResolver) {
-        File outFile = new File(Tools.DIR_CACHE, "world_" + System.nanoTime() + ".zip");
+    private void startImport(ContentKind kind) {
+        if(!isAdded()) return;
+        mPendingImportKind = kind;
+        mImportLauncher.launch(new String[]{"*/*"});
+    }
+
+    /**
+     * Bring the picked files into the game. A modpack makes an instance of its own for
+     * every archive, while the other kinds are placed into one instance asked for once
+     * for the whole batch.
+     */
+    private void performLocalInstall(List<Uri> uris, ContentKind kind, Context context) {
+        ContentResolver contentResolver = context.getContentResolver();
+        if (kind == ContentKind.MODPACK) {
+            for (Uri uri : uris) {
+                if (!installLocalModpack(uri, context, contentResolver)) break;
+            }
+            return;
+        }
+        ArrayList<ContentInstaller.PickedFile> picked = new ArrayList<>();
+        for (Uri uri : uris) {
+            String fileName = Tools.getFileName(context, uri);
+            if (fileName != null) picked.add(new ContentInstaller.PickedFile(uri, fileName));
+        }
+        if (picked.isEmpty()) return;
+        ContentInstaller.handleLocalFiles(context, kind, picked);
+    }
+
+    /**
+     * Unpack one modpack archive into an instance the installer creates for it.
+     *
+     * @return false when the rest of the batch should be left alone
+     */
+    private boolean installLocalModpack(Uri uri, Context context, ContentResolver contentResolver) {
+        String fileName = Tools.getFileName(context, uri);
+        if (fileName == null) return true;
+        DownloadStop.beginWork();
+        File outFile = new File(Tools.DIR_CACHE, fileName + ".cf");
         ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_copying);
         try (InputStream inputStream = contentResolver.openInputStream(uri);
              OutputStream outputStream = new FileOutputStream(outFile)) {
             if (inputStream == null) {
                 ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
-                return;
+                return true;
             }
             DownloadUtils.copyCancellable(inputStream, outputStream);
             outputStream.flush();
@@ -160,9 +171,19 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             outFile.delete();
             ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
             Tools.showErrorRemote("Error", e);
-            return;
+            return !DownloadStop.isStopped(e);
         }
-        ContentInstaller.handleLocalWorldArchive(context, outFile, fileName);
+        boolean keepGoing = true;
+        try {
+            modpackApi.installLocalModpack(fileName, outFile, null);
+        } catch (IOException e) {
+            Tools.showErrorRemote("Error", e);
+            keepGoing = !DownloadStop.isStopped(e);
+        } finally {
+            outFile.delete();
+            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+        }
+        return keepGoing;
     }
 
     public SearchModFragment(){
@@ -213,11 +234,10 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         });
         mFilterButton.setOnClickListener(v -> displayFilterDialog());
         mImportButton = view.findViewById(R.id.mineButton_import_local_modpack);
-        mImportButton.setOnClickListener(v -> {
-            mImportLauncher.launch("*/*");
-        });
+        mImportButton.setOnClickListener(v -> startImport(mSearchFilters.kind));
         view.findViewById(R.id.content_manage_button).setOnClickListener(v ->
-                InstalledContent.handleManage(requireContext().getApplicationContext()));
+                InstalledContent.handleManage(requireContext().getApplicationContext(), kind ->
+                        startImport(kind != null ? kind : mSearchFilters.kind)));
         mTaskCountListener = taskCount -> {
             runOnUiThread(() -> mImportButton.setEnabled(taskCount == 0));
             return false;
@@ -333,21 +353,19 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     }
 
     /**
-     * The local file picker either unpacks a modpack into a profile it creates itself
-     * or drops a world archive into an instance. The remaining kinds have nothing to
-     * pick from the device.
+     * Every kind of content can be brought in from the device, so the button stays on
+     * and names what the current tab will take.
      */
     private void updateImportButton() {
         if(mImportButton == null) return;
-        if(mSearchFilters.kind == ContentKind.MODPACK) {
-            mImportButton.setText(R.string.import_local_modpack);
-            mImportButton.setVisibility(View.VISIBLE);
-        }else if(mSearchFilters.kind == ContentKind.WORLD) {
-            mImportButton.setText(R.string.content_import_local_world);
-            mImportButton.setVisibility(View.VISIBLE);
-        }else {
-            mImportButton.setVisibility(View.GONE);
-        }
+        ContentKind kind = mSearchFilters.kind;
+        if(kind == ContentKind.MODPACK) mImportButton.setText(R.string.import_local_modpack);
+        else if(kind == ContentKind.WORLD) mImportButton.setText(R.string.content_import_local_world);
+        else if(kind == ContentKind.MOD) mImportButton.setText(R.string.content_import_local_mod);
+        else if(kind == ContentKind.RESOURCE_PACK) mImportButton.setText(R.string.content_import_local_resource_pack);
+        else if(kind == ContentKind.SHADER) mImportButton.setText(R.string.content_import_local_shader);
+        else mImportButton.setText(R.string.content_import_local_file);
+        mImportButton.setVisibility(View.VISIBLE);
     }
 
     private void searchMods(String name) {

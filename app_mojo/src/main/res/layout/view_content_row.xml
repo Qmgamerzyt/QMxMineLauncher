@@ -6,11 +6,24 @@
     android:orientation="horizontal"
     android:paddingVertical="@dimen/padding_small">
 
+    <ImageView
+        android:id="@+id/content_thumb"
+        android:layout_width="@dimen/_40sdp"
+        android:layout_height="@dimen/_40sdp"
+        android:background="@drawable/content_thumb_background"
+        android:contentDescription="@null"
+        android:padding="@dimen/padding_small"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_px_file" />
+
     <TextView
         android:id="@+id/content_row_label"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/padding_medium"
         android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="@color/primary_text"
         android:textSize="@dimen/_13ssp" />
 
