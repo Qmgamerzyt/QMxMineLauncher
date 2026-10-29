@@ -21,6 +21,8 @@ public class CommonLoginUtils {
 
     public static OAuthTokenResponse exchangeAuthCode(URL url, String formData) throws IOException, PresentableException {
         HttpURLConnection conn = (HttpURLConnection)url.openConnection();
+        conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
         conn.setRequestProperty("charset", "utf-8");
         conn.setRequestProperty("Content-Length", Integer.toString(formData.getBytes(StandardCharsets.UTF_8).length));

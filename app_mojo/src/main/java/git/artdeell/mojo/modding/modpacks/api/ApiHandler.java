@@ -60,6 +60,8 @@ public class ApiHandler {
         Log.d("ApiHandler", url);
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
             addHeaders(conn, headers);
             InputStream inputStream = conn.getInputStream();
             String data = Tools.read(inputStream);
@@ -80,6 +82,8 @@ public class ApiHandler {
     public static String postRaw(Map<String, String> headers, String url, String body) {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");

@@ -4,7 +4,6 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.modding.modpacks.api.modloader.LoaderInstaller;
 import git.artdeell.mojo.modding.modpacks.models.Constants;
 import git.artdeell.mojo.modding.modpacks.models.ContentKind;
@@ -24,7 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -32,6 +34,10 @@ import java.util.zip.ZipFile;
  * Group all apis under the same umbrella, as another layer of abstraction
  */
 public class CommonApi implements ModpackApi {
+    /** Runs the per-provider searches, one thread each, so a slow host can't take the shared pool down with it. */
+    private static final ExecutorService SEARCH_EXECUTOR = Executors.newFixedThreadPool(2);
+    /** How long a search waits for its providers before giving up on them. */
+    private static final long SEARCH_WAIT_MS = 40000;
 
     private final ModpackApi mCurseforgeApi;
     private final ModpackApi mModrinthApi;
@@ -70,7 +76,7 @@ public class CommonApi implements ModpackApi {
             // and the previous result is null, it means that na error has occured on the previous
             // page. We lost contingency anyway, so don't bother requesting.
             if(previousPageResult != null && results[i] == null) continue;
-            futures[i] = MojoApplication.sExecutorService.submit(new ApiDownloadTask(i, searchFilters,
+            futures[i] = SEARCH_EXECUTOR.submit(new ApiDownloadTask(i, searchFilters,
                     results[i]));
         }
 
@@ -84,7 +90,7 @@ public class CommonApi implements ModpackApi {
             Future<?> future = futures[i];
             if(future == null) continue;
             try {
-                SearchResult searchResult = results[i] = (SearchResult) future.get();
+                SearchResult searchResult = results[i] = (SearchResult) future.get(SEARCH_WAIT_MS, TimeUnit.MILLISECONDS);
                 if(searchResult != null) hasSuccessful = true;
                 else continue;
                 totalSize += searchResult.totalResultCount;

@@ -251,6 +251,8 @@ public class MicrosoftBackgroundLogin implements BackgroundLogin{
 
         HttpURLConnection conn = (HttpURLConnection)url.openConnection();
         conn.setRequestProperty("Authorization", "Bearer " + mcAccessToken);
+        conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
         conn.setUseCaches(false);
         conn.connect();
         if(conn.getResponseCode() < 200 || conn.getResponseCode() >= 300) {
@@ -266,6 +268,8 @@ public class MicrosoftBackgroundLogin implements BackgroundLogin{
 
         HttpURLConnection conn = (HttpURLConnection)url.openConnection();
         conn.setRequestProperty("Authorization", "Bearer " + mcAccessToken);
+        conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
         conn.setUseCaches(false);
         conn.connect();
 
@@ -304,6 +308,8 @@ public class MicrosoftBackgroundLogin implements BackgroundLogin{
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setRequestProperty("Accept", "application/json");
         conn.setRequestProperty("charset", "utf-8");
+        conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
         try {
             conn.setRequestProperty("Content-Length", Integer.toString(formData.getBytes(StandardCharsets.UTF_8).length));
             conn.setRequestMethod("POST");

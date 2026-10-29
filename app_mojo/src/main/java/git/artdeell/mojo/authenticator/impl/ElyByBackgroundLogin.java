@@ -104,6 +104,8 @@ public class ElyByBackgroundLogin implements BackgroundLogin {
     private ElyAccountInfo acquireAccountData(String accessToken) throws IOException, PresentableException {
         URL url = new URL(accountInfoUrl);
         HttpURLConnection conn = (HttpURLConnection)url.openConnection();
+        conn.setConnectTimeout(Tools.HTTP_CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(Tools.HTTP_READ_TIMEOUT_MS);
         conn.setRequestProperty("Authorization", "Bearer " + accessToken);
         conn.setUseCaches(false);
         conn.connect();

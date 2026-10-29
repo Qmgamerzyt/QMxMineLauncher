@@ -52,6 +52,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class MoJsonDownloader extends Downloader {
 
@@ -125,7 +126,7 @@ public class MoJsonDownloader extends Downloader {
         mAllLibraries = new LinkedHashSet<>();
 
         try {
-            mSubstitutionMap = sSubstitutionMapFuture.get();
+            mSubstitutionMap = sSubstitutionMapFuture.get(60, TimeUnit.SECONDS);
         } catch (Exception e) {
             throw new PresentableException(e, R.string.mjdl_submap_error_title, R.string.mjdl_submap_error_subtitle);
         }

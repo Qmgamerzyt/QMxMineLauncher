@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * This image is intended to keep the mod icon cache tidy (aka under 100 megabytes)
@@ -19,6 +21,8 @@ public class IconCacheJanitor implements Runnable{
     // in case of an overflow, 50 mb
     private static Future<?> sJanitorFuture;
     private static boolean sJanitorRan = false;
+    /** How long icon loading waits for the cache trim before going on without it. */
+    private static final long JANITOR_WAIT_MS = 5000;
     private IconCacheJanitor() {
         // don't allow others to create this
     }
@@ -74,13 +78,17 @@ public class IconCacheJanitor implements Runnable{
      * Note that the thread waiting must not be interrupted.
      */
     public static void waitForJanitorToFinish() {
+        Future<?> janitorFuture;
         synchronized (IconCacheJanitor.class) {
-            if (sJanitorFuture == null) return;
-            try {
-                sJanitorFuture.get();
-            } catch (ExecutionException | InterruptedException e) {
-                throw new RuntimeException("Should not happen!", e);
-            }
+            janitorFuture = sJanitorFuture;
+        }
+        if (janitorFuture == null) return;
+        try {
+            janitorFuture.get(JANITOR_WAIT_MS, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException("Should not happen!", e);
+        } catch (TimeoutException e) {
+            Log.i("IconCacheJanitor", "janitor still running, icons load anyway");
         }
     }
 }

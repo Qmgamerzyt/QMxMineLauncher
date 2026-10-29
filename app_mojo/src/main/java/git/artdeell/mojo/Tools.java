@@ -90,6 +90,10 @@ import java.util.Objects;
 public final class Tools {
     public static final String MAVEN_CENTRAL = "https://maven-central-eu.storage-download.googleapis.com/maven2/";
     public  static final float BYTE_TO_MB = 1024 * 1024;
+    /** How long a request waits to reach a host before giving up on it. */
+    public static final int HTTP_CONNECT_TIMEOUT_MS = 10000;
+    /** How long a request waits for more of a response before giving up on it. */
+    public static final int HTTP_READ_TIMEOUT_MS = 20000;
     public static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     public static String APP_NAME = "QMxMine";
 
