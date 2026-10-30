@@ -299,6 +299,8 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             String loader = arguments.getString(ARG_LOADER);
             if(loader != null) mSearchFilters.loader = SearchLoader.fromName(loader).name();
         }
+        // The kind was read above, so what it cannot honour is dropped right here
+        normalizeNarrowing();
         mTabViews = new TextView[] {
                 bindTab(view, R.id.search_tab_mod, ContentKind.MOD),
                 bindTab(view, R.id.search_tab_resource_pack, ContentKind.RESOURCE_PACK),
@@ -324,6 +326,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         // Every kind is grouped in its own way, so the picked categories belong to
         // the tab that was showing when they were chosen and start over here
         mSearchFilters.clearCategories();
+        normalizeNarrowing();
         refreshTabs();
         updateImportButton();
         refreshFilterButton();
@@ -334,8 +337,31 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     private void refreshFilterButton() {
         Context context = getContext();
         if(mFilterButton == null || context == null) return;
+        // Worlds carry no filters of their own, so there is nothing for the button to open
+        mFilterButton.setVisibility(mSearchFilters.kind == ContentKind.WORLD ? View.GONE : View.VISIBLE);
         mFilterButton.setColorFilter(ContextCompat.getColor(context, mSearchFilters.isFiltered()
                 ? R.color.minebutton_color : R.color.secondary_text));
+    }
+
+    /** Drops every narrowing the kind on screen has no way to honour. */
+    private void normalizeNarrowing() {
+        SearchLoader[] loaderOptions = SearchLoader.forKind(mSearchFilters.kind);
+        if(loaderOptions == null) {
+            mSearchFilters.loader = SearchLoader.ANY.name();
+            if(mSearchFilters.kind == ContentKind.WORLD) mSearchFilters.mcVersion = null;
+            return;
+        }
+        if(loaderSlot(loaderOptions, mSearchFilters.loader) == 0
+                && !SearchLoader.ANY.name().equals(mSearchFilters.loader))
+            mSearchFilters.loader = SearchLoader.ANY.name();
+    }
+
+    /** The slot a stored loader sits in among the options of the kind, zero when it is not one of them. */
+    private static int loaderSlot(SearchLoader[] options, String loader) {
+        for(int i = 0; i < options.length; i++) {
+            if(options[i].name().equals(loader)) return i;
+        }
+        return 0;
     }
 
     private void refreshTabs() {
@@ -375,6 +401,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     }
 
     private void displayFilterDialog() {
+        if(mSearchFilters.kind == ContentKind.WORLD) return;
         AlertDialog dialog = new AlertDialog.Builder(requireContext())
                 .setView(R.layout.dialog_mod_filters)
                 .create();
@@ -395,20 +422,32 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
             assert mCategoriesButton != null;
             assert mApplyButton != null;
 
-            // The labels sit in the same order the enums are declared in, so the
-            // position in the spinner is the value the search will be given
-            mLoaderSpinner.setAdapter(new ArrayAdapter<>(requireContext(),
-                    R.layout.item_simple_list_1, getResources().getStringArray(R.array.content_filter_loaders)));
+            // The kind decides which loaders the spinner offers, so it is read first
+            ContentKind dialogKind = mSearchFilters.kind;
+            SearchLoader[] loaderOptions = SearchLoader.forKind(dialogKind);
+            TextView mLoaderLabel = dialog.findViewById(R.id.search_mod_loader_textview);
+            assert mLoaderLabel != null;
+            if(loaderOptions == null) {
+                // A resource pack is not built on a loader, the row has nothing to offer
+                mLoaderLabel.setVisibility(View.GONE);
+                mLoaderSpinner.setVisibility(View.GONE);
+            }else {
+                mLoaderLabel.setVisibility(View.VISIBLE);
+                mLoaderSpinner.setVisibility(View.VISIBLE);
+                mLoaderSpinner.setAdapter(new ArrayAdapter<>(requireContext(),
+                        R.layout.item_simple_list_1, getResources().getStringArray(
+                        dialogKind == ContentKind.SHADER ? R.array.content_filter_shader_loaders
+                                : R.array.content_filter_loaders)));
+                mLoaderSpinner.setSelection(loaderSlot(loaderOptions, mSearchFilters.loader));
+            }
             mSortSpinner.setAdapter(new ArrayAdapter<>(requireContext(),
                     R.layout.item_simple_list_1, getResources().getStringArray(R.array.content_filter_sorts)));
-            mLoaderSpinner.setSelection(SearchLoader.fromName(mSearchFilters.loader).ordinal());
             mSortSpinner.setSelection(SearchSort.fromValue(mSearchFilters.sort).ordinal());
 
             // The categories are held back until Apply, so the list can be opened and
             // changed without the search running on every tick
             ArrayList<SearchCategory> pickedCategories = new ArrayList<>(mSearchFilters.categories);
             updateCategoryLabel(mCategoriesButton, pickedCategories);
-            ContentKind dialogKind = mSearchFilters.kind;
 
             // Setup the expendable list behavior
             mSelectVersionButton.setOnClickListener(v -> VersionSelectorDialog.open(v.getContext(), true, (id, snapshot)-> mSelectedVersion.setText(id)));
@@ -424,8 +463,9 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
                 mSearchFilters.mcVersion = mSelectedVersion.getText().toString();
                 int loaderPosition = mLoaderSpinner.getSelectedItemPosition();
                 int sortPosition = mSortSpinner.getSelectedItemPosition();
-                mSearchFilters.loader = loaderPosition >= 0 && loaderPosition < SearchLoader.values().length
-                        ? SearchLoader.values()[loaderPosition].name() : SearchLoader.ANY.name();
+                mSearchFilters.loader = loaderOptions == null || loaderPosition < 0
+                        || loaderPosition >= loaderOptions.length
+                        ? SearchLoader.ANY.name() : loaderOptions[loaderPosition].name();
                 mSearchFilters.sort = sortPosition >= 0 && sortPosition < SearchSort.values().length
                         ? SearchSort.values()[sortPosition].name() : SearchSort.RELEVANCE.name();
                 mSearchFilters.clearCategories();

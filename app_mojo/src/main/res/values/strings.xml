@@ -418,6 +418,13 @@
         <item>Quilt</item>
     </string-array>
 
+    <!-- One label per entry of SearchLoader.forKind(SHADER), in the order they are declared -->
+    <string-array name="content_filter_shader_loaders">
+        <item>Any loader</item>
+        <item>Iris</item>
+        <item>OptiFine</item>
+    </string-array>
+
     <!-- One label per entry of SearchSort, in the order the enum declares them -->
     <string-array name="content_filter_sorts">
         <item>Relevance</item>

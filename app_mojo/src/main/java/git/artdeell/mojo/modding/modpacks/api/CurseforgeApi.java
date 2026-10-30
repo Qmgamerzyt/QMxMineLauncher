@@ -80,9 +80,11 @@ public class CurseforgeApi implements ModpackApi{
         params.put("sortOrder", "desc");
         if(searchFilters.mcVersion != null && !searchFilters.mcVersion.isEmpty())
             params.put("gameVersion", searchFilters.mcVersion);
-        // A loader carries its own code here rather than a category
+        // A loader carries its own code here rather than a category. Iris and optifine
+        // are not codes CurseForge knows, they leave this parameter out
         SearchLoader loader = SearchLoader.fromName(searchFilters.loader);
-        if(loader != SearchLoader.ANY) params.put("modLoaderType", loader.curseforgeCode);
+        if(loader != SearchLoader.ANY && loader.curseforgeCode != 0)
+            params.put("modLoaderType", loader.curseforgeCode);
         // Several categories go in as one bracketed list. CurseForge reads the plain
         // spelling as if nothing had been asked for, so a lone one joins in as well
         int[] categoryIds = searchFilters.curseforgeCategories();
