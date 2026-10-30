@@ -9,6 +9,7 @@ import androidx.fragment.app.FragmentActivity;
 
 import git.artdeell.mojo.LauncherActivity;
 import git.artdeell.mojo.MojoApplication;
+import git.artdeell.mojo.R;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.fragments.SearchModFragment;
 import git.artdeell.mojo.instances.Instance;
@@ -35,9 +36,8 @@ public final class ContentNavigation {
      * @param kind     the kind the screen opens on, null to leave it on its default
      */
     public static void open(Context context, Instance instance, ContentKind kind) {
-        int container = context.getResources().getIdentifier("container_fragment", "id",
-                context.getPackageName());
-        if(context instanceof FragmentActivity && container != 0) {
+        if(context instanceof FragmentActivity
+                && ((FragmentActivity) context).findViewById(R.id.container_fragment) != null) {
             openInActivity((FragmentActivity) context, instance, kind);
         }else {
             openInLauncher(context, kind);
@@ -60,7 +60,8 @@ public final class ContentNavigation {
                     bundle.putString(SearchModFragment.ARG_LOADER, loader);
             }
             Tools.runOnUiThread(() -> {
-                if(activity.getSupportFragmentManager().isStateSaved()) {
+                if(activity.getSupportFragmentManager().isStateSaved()
+                        || activity.findViewById(R.id.container_fragment) == null) {
                     openInLauncher(activity, kind);
                     return;
                 }
