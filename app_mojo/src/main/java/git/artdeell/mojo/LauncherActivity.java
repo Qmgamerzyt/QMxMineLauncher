@@ -209,9 +209,9 @@ public class LauncherActivity extends BaseActivity {
     }
 
     /**
-     * A browse started from the game drawer arrives here, since that drawer cannot
-     * hold the content screen itself. The screen the launcher is on is replaced by
-     * the one for the kind that was asked for.
+     * A browse started from a screen with nowhere to put the content screen arrives
+     * here. The screen the launcher is on is replaced by the one for the kind that
+     * was asked for.
      */
     private void handleContentKindIntent(Intent intent) {
         if(intent == null) return;

@@ -18,8 +18,9 @@ import git.artdeell.mojo.utils.profiles.InstanceVersions;
 
 /**
  * Takes the player to the content screen for one kind of content, wherever they ask
- * from. A screen that already holds fragments gets the content screen placed on top of
- * its own, anything else, the game drawer for instance, goes through the launcher.
+ * from. A screen that can hold fragments, the launcher and the game drawer among them,
+ * gets the content screen placed on top of its own, anything else goes through the
+ * launcher.
  */
 public final class ContentNavigation {
     /** Extra carrying the kind the content screen opens on. */

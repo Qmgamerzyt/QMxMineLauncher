@@ -49,6 +49,8 @@ import com.kdt.LoggerView;
 
 import git.artdeell.mojo.BaseActivity;
 import git.artdeell.mojo.CallbackBridge;
+import com.kdt.mcgui.ProgressLayout;
+
 import git.artdeell.mojo.game.renderer.GameRenderer;
 import git.artdeell.mojo.utils.GpuUtils;
 import git.artdeell.mojo.utils.KeycodeUtils;
@@ -77,6 +79,7 @@ import git.artdeell.mojo.game.platform.Platform;
 import git.artdeell.mojo.game.platform.backend.DummyBackend;
 import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.prefs.QuickSettingSideDialog;
+import git.artdeell.mojo.progresskeeper.ProgressKeeper;
 import git.artdeell.mojo.services.GameService;
 import git.artdeell.mojo.tasks.AsyncAssetManager;
 import git.artdeell.mojo.utils.JREUtils;
@@ -114,6 +117,10 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
 
     /** The kind the open picker is bringing in for, read back once the files arrive. */
     private ContentKind mContentImportKind;
+    /** The content screen area over the game, shown only while a content fragment sits on it. */
+    private View mContentContainer;
+    /** Download rows shown over the game while work runs. */
+    private ProgressLayout mGameProgressLayout;
     /** Picks several files at once, all of them for the kind held in the field above. */
     private final ActivityResultLauncher<String[]> mContentImportLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenMultipleDocuments(), uris -> {
@@ -166,6 +173,7 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         // Start the service a bit early
         ContextCompat.startForegroundService(this, gameServiceIntent);
         initLayout(R.layout.activity_basemain);
+        setupContentOverlay();
 
         Platform.initialize(this, launcherGLView);
 
@@ -396,6 +404,10 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
     protected void onDestroy() {
         super.onDestroy();
         ContextExecutor.clearActivity();
+        if(mGameProgressLayout != null) {
+            ProgressKeeper.removeTaskCountListener(mGameProgressLayout);
+            mGameProgressLayout.cleanUpObservers();
+        }
     }
 
     @Override
@@ -455,6 +467,23 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         dialog.setTitle(R.string.control_customkey);
         dialog.setItems(KeycodeUtils.generateKeyName(), (dInterface, position) -> KeycodeUtils.execKeyIndex(position));
         dialog.show();
+    }
+
+    /** Binds the area the content screen opens over the game with, plus the download rows. */
+    private void setupContentOverlay() {
+        mContentContainer = findViewById(R.id.container_fragment);
+        getSupportFragmentManager().addOnBackStackChangedListener(this::syncContentOverlay);
+        syncContentOverlay();
+        mGameProgressLayout = findViewById(R.id.progress_layout);
+        mGameProgressLayout.observe(ProgressLayout.INSTALL_MODPACK);
+        ProgressKeeper.addTaskCountListener(mGameProgressLayout);
+    }
+
+    /** Puts the content area up while a content fragment sits on it and takes it down once the player is back. */
+    private void syncContentOverlay() {
+        if(mContentContainer == null) return;
+        mContentContainer.setVisibility(getSupportFragmentManager().getBackStackEntryCount() > 0
+                ? View.VISIBLE : View.GONE);
     }
 
     /** Look at what the running instance holds of one of the kinds it can pick up while it runs. */

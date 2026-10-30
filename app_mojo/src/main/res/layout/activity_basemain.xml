@@ -111,6 +111,21 @@
 			android:visibility="gone"
 			/>
 
+		<!-- Holds the content screen while it sits over the game -->
+		<FrameLayout
+			android:id="@+id/container_fragment"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:visibility="gone" />
+
+		<!-- Download rows that read the same progress the launcher shows -->
+		<com.kdt.mcgui.ProgressLayout
+			android:id="@+id/progress_layout"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_gravity="bottom"
+			android:visibility="gone" />
+
 	</FrameLayout>
 
 	<ListView
