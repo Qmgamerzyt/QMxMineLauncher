@@ -101,7 +101,7 @@ public class MoJsonDownloader extends Downloader {
                 listener.onDownloadFailed(e); // Handled separately from the general case because it subclasses RuntimeException. Ugh.
             } catch(PresentableException e) {
                 // A row stop reaches us wrapped in a PresentableException, which is not a failure
-                if(!wasCancelled(e)) throw e;
+                if(!wasCancelled(e)) listener.onDownloadFailed(e);
             } catch(RuntimeException e) {
                 throw e; // log fatal errors to Google Play
             } catch (InterruptedException ignored) {
