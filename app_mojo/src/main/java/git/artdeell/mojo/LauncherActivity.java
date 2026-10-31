@@ -197,13 +197,7 @@ public class LauncherActivity extends BaseActivity {
 
         new AsyncVersionList().getVersionList(versions -> ExtraCore.setValue(ExtraConstants.RELEASE_TABLE, versions));
 
-        mProgressLayout.observe(ProgressLayout.DOWNLOAD_GAME);
-        mProgressLayout.observe(ProgressLayout.UNPACK_RUNTIME);
-        mProgressLayout.observe(ProgressLayout.INSTALL_MODPACK);
-        mProgressLayout.observe(ProgressLayout.AUTHENTICATE);
-        mProgressLayout.observe(ProgressLayout.DOWNLOAD_VERSION_LIST);
-        mProgressLayout.observe(ProgressLayout.INSTANCE_INSTALL);
-        mProgressLayout.observe(ProgressLayout.DATA_MIGRATION);
+        mProgressLayout.observeAll();
 
         handleContentKindIntent(getIntent());
     }

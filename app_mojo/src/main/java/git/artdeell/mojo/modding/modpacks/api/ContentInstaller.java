@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import com.kdt.mcgui.ProgressLayout;
@@ -75,7 +76,8 @@ public class ContentInstaller {
                                                  int selectedVersion, Map<String, String> titles,
                                                  Set<String> approvedOptional) {
         DownloadStop.beginWork();
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
+        String progressKey = ProgressLayout.contentInstallKey();
+        ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
         ArrayList<String> missed = new ArrayList<>();
         MojoApplication.sExecutorService.execute(() -> {
             try {
@@ -83,16 +85,17 @@ public class ContentInstaller {
                 Instance selected = Instances.loadSelectedInstance();
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
+                        progressKey,
                         instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
                                 in -> {
-                                    install(in, modDetail, selectedVersion);
+                                    install(in, modDetail, selectedVersion, progressKey);
                                     missed.addAll(DependencyResolver.installAll(context, api, in,
                                             modDetail, selectedVersion, titles, approvedOptional));
                                     return null;
-                                }, missed))),
-                        () -> ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK));
+                                }, missed, progressKey))),
+                        () -> ProgressLayout.clearProgress(progressKey));
             }catch (IOException e) {
-                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                ProgressLayout.clearProgress(progressKey);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
             }
         });
@@ -112,18 +115,20 @@ public class ContentInstaller {
         if(files == null || files.isEmpty()) return;
         if(kind == null || !kind.installsIntoExistingInstance()) return;
         DownloadStop.beginWork();
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
+        String progressKey = ProgressLayout.contentInstallKey();
+        ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
         MojoApplication.sExecutorService.execute(() -> {
             try {
                 List<Instance> instances = Instances.loadAllInstances();
                 Instance selected = Instances.loadSelectedInstance();
                 ContextExecutor.executeActivity(activity -> pickInstance(activity, instances, selected,
                         R.string.content_install_select_instance, R.string.generic_install,
+                        progressKey,
                         instance -> MojoApplication.sExecutorService.execute(() ->
-                                placePicked(context, instance, kind, files))),
-                        () -> ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK));
+                                placePicked(context, instance, kind, files, progressKey))),
+                        () -> ProgressLayout.clearProgress(progressKey));
             }catch (IOException e) {
-                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                ProgressLayout.clearProgress(progressKey);
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);
             }
         });
@@ -143,8 +148,9 @@ public class ContentInstaller {
         if(files == null || files.isEmpty() || instance == null) return;
         if(kind == null || !kind.installsIntoExistingInstance()) return;
         DownloadStop.beginWork();
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
-        MojoApplication.sExecutorService.execute(() -> placePicked(context, instance, kind, files));
+        String progressKey = ProgressLayout.contentInstallKey();
+        ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
+        MojoApplication.sExecutorService.execute(() -> placePicked(context, instance, kind, files, progressKey));
     }
 
     /**
@@ -153,7 +159,7 @@ public class ContentInstaller {
      * the game is never handed something it cannot read.
      */
     private static void placePicked(Context context, Instance instance, ContentKind kind,
-                                    List<PickedFile> files) {
+                                    List<PickedFile> files, String progressKey) {
         int placed = 0;
         int leftOut = 0;
         IOException failure = null;
@@ -162,10 +168,12 @@ public class ContentInstaller {
             File destination = new File(gameDirectory, kind.folder);
             FileUtils.ensureDirectory(destination);
             ContentIndex index = ContentIndex.read(gameDirectory);
+            long keyGeneration = DownloadStop.generationOf(progressKey);
             for(int i = 0; i < files.size(); i++) {
                 DownloadStop.checkWork();
+                DownloadStop.checkKey(progressKey, keyGeneration);
                 PickedFile picked = files.get(i);
-                ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK,
+                ProgressLayout.setProgress(progressKey,
                         (int)(i * 100L / files.size()), R.string.content_install_copying_n,
                         i + 1, files.size());
                 if(!accepts(kind, picked.name)) {
@@ -174,7 +182,7 @@ public class ContentInstaller {
                 }
                 File staged = null;
                 try {
-                    staged = stage(context, picked);
+                    staged = stage(context, picked, progressKey, keyGeneration);
                     String title = FileUtils.removeExtension(picked.name);
                     if(kind == ContentKind.WORLD) {
                         File world = unpackWorld(staged, destination, worldNameFor(title));
@@ -201,16 +209,17 @@ public class ContentInstaller {
             }
             index.write(gameDirectory);
         }catch (IOException e) {
-            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            ProgressLayout.clearProgress(progressKey);
             Tools.showErrorRemote(context, R.string.content_install_failed, e);
             return;
         }
-        ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+        ProgressLayout.clearProgress(progressKey);
         reportPicked(context, instance, kind, placed, leftOut, failure);
     }
 
     /** Copy one picked file into the cache under a name of its own. */
-    private static File stage(Context context, PickedFile picked) throws IOException {
+    private static File stage(Context context, PickedFile picked, String progressKey,
+                              long keyGeneration) throws IOException {
         String safeName = FileUtils.escapeFileName(picked.name);
         if(safeName.isEmpty() || safeName.equals(".") || safeName.equals("..")) safeName = "content";
         File staged = new File(Tools.DIR_CACHE, "pick_" + System.nanoTime() + "_" + safeName);
@@ -218,7 +227,8 @@ public class ContentInstaller {
         try(InputStream input = context.getContentResolver().openInputStream(picked.uri);
             OutputStream output = new FileOutputStream(staged)) {
             if(input == null) throw new IOException("Could not read " + picked.name);
-            DownloadUtils.copyCancellable(input, output);
+            DownloadUtils.copyCancellable(input, output,
+                    () -> DownloadStop.checkKey(progressKey, keyGeneration));
             output.flush();
         }catch (IOException e) {
             staged.delete();
@@ -302,9 +312,10 @@ public class ContentInstaller {
      * @param buttonRes label of the confirming button
      */
     static void pickInstance(Context context, List<Instance> instances, Instance selected,
-                             int titleRes, int buttonRes, InstanceChosen chosen) {
+                             int titleRes, int buttonRes, @Nullable String progressKey,
+                             InstanceChosen chosen) {
         if(instances.isEmpty()) {
-            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            clearRow(progressKey);
             Tools.showErrorRemote(context, R.string.content_install_no_instances,
                     new IOException("There is no instance to choose"));
             return;
@@ -322,15 +333,20 @@ public class ContentInstaller {
                 .setPositiveButton(buttonRes, (dialog, which) -> {
                     int position = ((AlertDialog) dialog).getListView().getCheckedItemPosition();
                     if(position < 0 || position >= instances.size()) {
-                        ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                        clearRow(progressKey);
                         return;
                     }
                     chosen.chosen(instances.get(position));
                 })
                 .setNegativeButton(android.R.string.cancel, (dialog, which) ->
-                        ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK))
-                .setOnCancelListener(dialog -> ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK))
+                        clearRow(progressKey))
+                .setOnCancelListener(dialog -> clearRow(progressKey))
                 .show();
+    }
+
+    /** Takes one job's row off the screen, callers that hold no row passing nothing. */
+    private static void clearRow(@Nullable String progressKey) {
+        if(progressKey != null) ProgressLayout.clearProgress(progressKey);
     }
 
     /**
@@ -342,7 +358,7 @@ public class ContentInstaller {
      *               install does not look for dependencies
      */
     private static void installInto(Context context, Instance instance, InstallAction action,
-                                    List<String> missed) {
+                                    List<String> missed, String progressKey) {
         try {
             action.run(instance);
             if(missed != null && !missed.isEmpty()) {
@@ -354,7 +370,7 @@ public class ContentInstaller {
         }catch (IOException e) {
             Tools.showErrorRemote(context, R.string.content_install_failed, e);
         }finally {
-            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            ProgressLayout.clearProgress(progressKey);
         }
     }
 
@@ -380,6 +396,12 @@ public class ContentInstaller {
      * @return the file, or the world folder for a world, that the instance ended up with
      */
     public static File install(Instance instance, ModDetail detail, int selectedVersion) throws IOException {
+        return install(instance, detail, selectedVersion, ProgressLayout.contentInstallKey());
+    }
+
+    /** The same install, filing its progress under the row the given key names. */
+    public static File install(Instance instance, ModDetail detail, int selectedVersion,
+                               String progressKey) throws IOException {
         ContentKind kind = detail.kind;
         if(!kind.installsIntoExistingInstance())
             throw new IOException("Content of kind " + kind + " is not placed inside an instance");
@@ -404,11 +426,12 @@ public class ContentInstaller {
 
         String hash = detail.versionHashes[selectedVersion];
         byte[] buffer = new byte[8192];
+        long keyGeneration = DownloadStop.generationOf(progressKey);
         try {
             DownloadUtils.ensureSha1(staged, hash, () -> DownloadUtils.downloadFileMonitored(
                     url, staged, buffer,
-                    new DownloaderProgressWrapper(kind.downloadProgressRes,
-                            ProgressLayout.INSTALL_MODPACK)));
+                    new DownloaderProgressWrapper(kind.downloadProgressRes, progressKey),
+                    () -> DownloadStop.checkKey(progressKey, keyGeneration)));
         }catch (IOException e) {
             staged.delete();
             throw e;

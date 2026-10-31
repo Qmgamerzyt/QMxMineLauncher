@@ -30,6 +30,18 @@
         >
 
         <!-- Content kind tabs -->
+        <TextView
+            android:id="@+id/search_mod_close"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?android:attr/selectableItemBackground"
+            android:padding="@dimen/padding_medium"
+            android:text="@string/content_browser_close"
+            android:textColor="@color/secondary_text"
+            android:textSize="@dimen/_13ssp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
         <HorizontalScrollView
             android:id="@+id/search_mod_tabs_scroll"
             android:layout_width="0dp"
@@ -37,7 +49,7 @@
             android:scrollbars="none"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toStartOf="@+id/search_mod_close">
 
             <LinearLayout
                 android:id="@+id/search_mod_tabs"

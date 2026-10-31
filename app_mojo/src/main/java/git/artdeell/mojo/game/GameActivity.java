@@ -475,7 +475,7 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
         getSupportFragmentManager().addOnBackStackChangedListener(this::syncContentOverlay);
         syncContentOverlay();
         mGameProgressLayout = findViewById(R.id.progress_layout);
-        mGameProgressLayout.observe(ProgressLayout.INSTALL_MODPACK);
+        mGameProgressLayout.observeAll();
         ProgressKeeper.addTaskCountListener(mGameProgressLayout);
     }
 
@@ -577,6 +577,13 @@ public class GameActivity extends BaseActivity implements ControlButtonMenuListe
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // The content screen sits over the game, so back takes it off rather than
+        // reaching the game underneath
+        if(event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                && getSupportFragmentManager().getBackStackEntryCount() > 0) {
+            if(event.getAction() == KeyEvent.ACTION_UP) getSupportFragmentManager().popBackStack();
+            return true;
+        }
         if(isInEditor) {
             if(event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
                 if(event.getAction() == KeyEvent.ACTION_DOWN) mControlLayout.askToExit(this);

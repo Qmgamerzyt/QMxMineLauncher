@@ -66,6 +66,16 @@ public class DownloadUtils {
 
     public static void downloadFileMonitored(String urlInput, File outputFile, @Nullable byte[] buffer,
                                              Tools.DownloaderFeedback monitor) throws IOException {
+        downloadFileMonitored(urlInput, outputFile, buffer, monitor, null);
+    }
+
+    /**
+     * The same download, one that also reads a stop of its own row while copying, so a
+     * press on that row alone ends this file and nothing else.
+     */
+    public static void downloadFileMonitored(String urlInput, File outputFile, @Nullable byte[] buffer,
+                                             Tools.DownloaderFeedback monitor, @Nullable StopCheck stopCheck)
+            throws IOException {
         FileUtils.ensureParentDirectory(outputFile);
 
         long generation = DownloadStop.generation();
@@ -82,6 +92,7 @@ public class DownloadUtils {
 
             while ((current = readStr.read(buffer)) != -1) {
                 DownloadStop.check(generation);
+                if (stopCheck != null) stopCheck.check();
                 overall += current;
                 fos.write(buffer, 0, current);
                 monitor.updateProgress(overall, length);
@@ -103,13 +114,25 @@ public class DownloadUtils {
      * the copy began. Used for the archives that come from the player's own storage.
      */
     public static void copyCancellable(InputStream inputStream, OutputStream outputStream) throws IOException {
+        copyCancellable(inputStream, outputStream, null);
+    }
+
+    /** The same copy, one that also reads a stop of its own row while running. */
+    public static void copyCancellable(InputStream inputStream, OutputStream outputStream,
+                                       @Nullable StopCheck stopCheck) throws IOException {
         long generation = DownloadStop.generation();
         byte[] buffer = new byte[8192];
         int read;
         while ((read = inputStream.read(buffer)) != -1) {
             DownloadStop.check(generation);
+            if (stopCheck != null) stopCheck.check();
             outputStream.write(buffer, 0, read);
         }
+    }
+
+    /** Reads one row's stop while a download runs, so a press on that row ends it. */
+    public interface StopCheck {
+        void check() throws DownloadCancelledException;
     }
 
     public static <T> T downloadStringCached(String url, String cacheName, ParseCallback<T> parseCallback) throws IOException, ParseException{

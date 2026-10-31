@@ -25,7 +25,9 @@ import java.util.Locale;
 
 public class ModpackInstaller {
 
-    public static LoaderInstaller installModpack(String modpackName, String title, File modpackFile, String icon, InstallFunction installFunction) throws IOException {
+    public static LoaderInstaller installModpack(String modpackName, String title, File modpackFile,
+                                                 String icon, String progressKey,
+                                                 InstallFunction installFunction) throws IOException {
         DownloadStop.checkWork();
         // Build a new minecraft instance, folder first
         LoaderInstaller loaderInstaller;
@@ -58,14 +60,16 @@ public class ModpackInstaller {
             throw e;
         } finally {
             modpackFile.delete();
-            ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+            ProgressLayout.clearProgress(progressKey);
         }
 
         return loaderInstaller;
     }
 
-    public static LoaderInstaller downloadModpack(ModDetail modDetail, int selectedVersion, InstallFunction installFunction) throws IOException {
+    public static LoaderInstaller downloadModpack(ModDetail modDetail, int selectedVersion,
+                                                  String progressKey, InstallFunction installFunction) throws IOException {
         DownloadStop.checkWork();
+        long keyGeneration = DownloadStop.generationOf(progressKey);
         String versionUrl = modDetail.versionUrls[selectedVersion];
         String versionHash = modDetail.versionHashes[selectedVersion];
         String modpackName = FileUtils.escapeFileName(modDetail.title.toLowerCase(Locale.ROOT) + " " + modDetail.versionNames[selectedVersion]);
@@ -87,8 +91,9 @@ public class ModpackInstaller {
             DownloadUtils.ensureSha1(modpackFile, versionHash, () -> {
                 DownloadUtils.downloadFileMonitored(versionUrl, modpackFile, downloadBuffer,
                         new DownloaderProgressWrapper(R.string.modpack_download_downloading_pack,
-                                ProgressLayout.INSTALL_MODPACK
-                        )
+                                progressKey
+                        ),
+                        () -> DownloadStop.checkKey(progressKey, keyGeneration)
                 );
             });
         } catch (IOException e) {
@@ -96,7 +101,7 @@ public class ModpackInstaller {
             throw e;
         }
 
-        return installModpack(modpackName, name, modpackFile, icon, installFunction);
+        return installModpack(modpackName, name, modpackFile, icon, progressKey, installFunction);
     }
 
     public interface InstallFunction {

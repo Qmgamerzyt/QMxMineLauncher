@@ -4,6 +4,7 @@ import com.kdt.mcgui.ProgressLayout;
 
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.tasks.SpeedCalculator;
+import git.artdeell.mojo.utils.DownloadCancelledException;
 import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.DownloadUtils;
 
@@ -35,6 +36,7 @@ public class Downloader {
     private static final ThreadLocal<byte[]> sThreadLocalBuffer = new ThreadLocal<>();
     protected static final File sPartFileDir = new File(Tools.DIR_GAME_HOME, "partfiles");
     private final String mProgressKey;
+    private final long mKeyGeneration;
     private final AtomicReference<IOException> mThreadException = new AtomicReference<>();
     private final AtomicInteger mDownloadedFileCounter = new AtomicInteger();
     private final AtomicLong mDownloadedSizeCounter = new AtomicLong();
@@ -47,6 +49,13 @@ public class Downloader {
 
     public Downloader(String mProgressKey) {
         this.mProgressKey = mProgressKey;
+        this.mKeyGeneration = DownloadStop.generationOf(mProgressKey);
+    }
+
+    /** Give up when either the whole list or this downloader's own row was stopped. */
+    private void checkStopped() throws DownloadCancelledException {
+        DownloadStop.check(mGeneration);
+        DownloadStop.checkKey(mProgressKey, mKeyGeneration);
     }
 
     protected void runDownloads(ArrayList<? extends TaskMetadata> downloads) throws IOException, InterruptedException {
@@ -83,7 +92,7 @@ public class Downloader {
         }
         double totalMegabytes = totalSize / ONE_MEGABYTE;
         while(mDownloadedFileCounter.get() < totalCount) {
-            DownloadStop.check(mGeneration);
+            checkStopped();
             IOException exception = mThreadException.get();
             if(exception != null) throw exception;
             if(sizeCounter) reportSizeProgress(totalMegabytes);
@@ -111,7 +120,7 @@ public class Downloader {
             for(TaskMetadata element : reducedList) executorService.submit(new CompleteMetadataTask(element, this));
             executorService.shutdown();
             while (!executorService.awaitTermination(33, TimeUnit.MILLISECONDS)) {
-                DownloadStop.check(mGeneration);
+                checkStopped();
                 IOException exception = mThreadException.get();
                 if(exception != null) throw exception;
                 reportCountProgress(R.string.newerdl_inserting_metadata_count, reducedList.size());
@@ -167,7 +176,7 @@ public class Downloader {
         byte[] buffer = getBuffer();
         int readLen;
         while((readLen = inputStream.read(buffer)) != -1) {
-            DownloadStop.check(mGeneration);
+            checkStopped();
             outputStream.write(buffer, 0, readLen);
             if(listener != null) listener.onBytesCopied(readLen);
             mInternetUsageCounter.getAndAdd(readLen);

@@ -9,6 +9,7 @@ public class ProgressKeeper {
     private static final HashMap<String, List<ProgressListener>> sProgressListeners = new HashMap<>();
     private static final HashMap<String, ProgressState> sProgressStates = new HashMap<>();
     private static final List<TaskCountListener> sTaskCountListeners = new ArrayList<>();
+    private static final List<KeyedProgressListener> sKeyedListeners = new ArrayList<>();
 
     public static synchronized void submitProgress(String progressRecord, int progress, int resid, Object... va) {
         ProgressState progressState = sProgressStates.get(progressRecord);
@@ -34,6 +35,13 @@ public class ProgressKeeper {
                     else if(shouldCallEnded) listener.onProgressEnded();
                     else listener.onProgressUpdated(progress, resid, va);
             }
+        // A keyed listener is shown every key as it comes and goes, so a list built
+        // from them follows work of any key, including one made up on the spot
+        for(KeyedProgressListener keyedListener : sKeyedListeners) {
+            if(shouldCallStarted) keyedListener.onKeyStarted(progressRecord);
+            else if(shouldCallEnded) keyedListener.onKeyEnded(progressRecord);
+            else keyedListener.onKeyUpdated(progressRecord, progress, resid, va);
+        }
     }
 
     private static void updateTaskCount(int count) {
@@ -65,6 +73,30 @@ public class ProgressKeeper {
     public static synchronized void removeListener(String progressRecord, ProgressListener listener) {
         List<ProgressListener> listenerWeakReferenceList = sProgressListeners.get(progressRecord);
         if(listenerWeakReferenceList != null) listenerWeakReferenceList.remove(listener);
+    }
+
+    /**
+     * Listen to every key at once. Work already running is replayed as the listener
+     * is added, so a list built this way shows what started before it existed.
+     */
+    public static synchronized void addKeyedListener(KeyedProgressListener listener) {
+        sKeyedListeners.add(listener);
+        for(HashMap.Entry<String, ProgressState> entry : sProgressStates.entrySet()) {
+            ProgressState state = entry.getValue();
+            listener.onKeyStarted(entry.getKey());
+            listener.onKeyUpdated(entry.getKey(), state.progress, state.resid, state.varArg);
+        }
+    }
+
+    public static synchronized void removeKeyedListener(KeyedProgressListener listener) {
+        sKeyedListeners.remove(listener);
+    }
+
+    /** One row of progress, wherever it comes from. */
+    public interface KeyedProgressListener {
+        void onKeyStarted(String key);
+        void onKeyUpdated(String key, int progress, int resid, Object... va);
+        void onKeyEnded(String key);
     }
 
     public static void addTaskCountListener(TaskCountListener listener) {

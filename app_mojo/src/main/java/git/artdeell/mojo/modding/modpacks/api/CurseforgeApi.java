@@ -275,13 +275,15 @@ public class CurseforgeApi implements ModpackApi{
     }
 
     @Override
-    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion) throws IOException{
+    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion, String progressKey) throws IOException{
         //TODO considering only modpacks for now
-        return ModpackInstaller.downloadModpack(modDetail, selectedVersion, this::installCurseforgeZip);
+        return ModpackInstaller.downloadModpack(modDetail, selectedVersion, progressKey,
+                (zipFile, destination) -> installCurseforgeZip(zipFile, destination, progressKey));
     }
 
     public LoaderInstaller installLocalModpack(String modpackName, File modpackFile, String icon) throws IOException {
-        return ModpackInstaller.installModpack(modpackName, modpackName, modpackFile, icon, this::installCurseforgeZip);
+        return ModpackInstaller.installModpack(modpackName, modpackName, modpackFile, icon, ProgressLayout.INSTALL_MODPACK,
+                (zipFile, destination) -> installCurseforgeZip(zipFile, destination, ProgressLayout.INSTALL_MODPACK));
     }
 
     private int getPaginatedDetails(ArrayList<JsonObject> objectList, int index, String modId) {
@@ -306,7 +308,8 @@ public class CurseforgeApi implements ModpackApi{
         return index + data.size();
     }
 
-    private LoaderInstaller installCurseforgeZip(File zipFile, File instanceDestination) throws IOException {
+    private LoaderInstaller installCurseforgeZip(File zipFile, File instanceDestination,
+                                                  String progressKey) throws IOException {
         try (ZipFile modpackZipFile = new ZipFile(zipFile)){
             CurseManifest curseManifest = Tools.GLOBAL_GSON.fromJson(
                     Tools.read(ZipUtils.getEntryStream(modpackZipFile, "manifest.json")),
@@ -316,7 +319,7 @@ public class CurseforgeApi implements ModpackApi{
                 return null;
             }
             try {
-                new CurseDownloader().start(curseManifest, instanceDestination);
+                new CurseDownloader(progressKey).start(curseManifest, instanceDestination);
             }catch (InterruptedException e) {
                 throw new IOException("NIY: InterruptedException", e);
             }
@@ -419,8 +422,8 @@ public class CurseforgeApi implements ModpackApi{
 
     class CurseDownloader extends Downloader {
 
-        public CurseDownloader() {
-            super(ProgressLayout.INSTALL_MODPACK);
+        public CurseDownloader(String progressKey) {
+            super(progressKey);
         }
 
         public void start(CurseManifest curseManifest, File instanceDestination) throws IOException, InterruptedException {

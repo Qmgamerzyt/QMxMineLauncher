@@ -26,6 +26,7 @@ import git.artdeell.mojo.tasks.mojson.mirrors.DownloadMirror;
 import git.artdeell.mojo.tasks.mojson.mirrors.MirrorTamperedException;
 import git.artdeell.mojo.prefs.LauncherPreferences;
 import git.artdeell.mojo.tasks.NativesExtractor;
+import git.artdeell.mojo.utils.DownloadCancelledException;
 import git.artdeell.mojo.utils.DownloadUtils;
 import git.artdeell.mojo.utils.FileUtils;
 import git.artdeell.mojo.utils.JSONUtils;
@@ -98,6 +99,8 @@ public class MoJsonDownloader extends Downloader {
                 listener.onDownloadDone(mClassPath.toArray(new File[0]));
             } catch(JsonParseException e) {
                 listener.onDownloadFailed(e); // Handled separately from the general case because it subclasses RuntimeException. Ugh.
+            } catch(DownloadCancelledException e) {
+                // The player ended the download through its row, nothing went wrong
             } catch(RuntimeException e) {
                 throw e; // log fatal errors to Google Play
             } catch (InterruptedException ignored) {

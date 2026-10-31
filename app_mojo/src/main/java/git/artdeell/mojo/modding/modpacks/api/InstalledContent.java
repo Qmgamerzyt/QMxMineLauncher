@@ -89,6 +89,7 @@ public class InstalledContent {
                 ContextExecutor.executeActivity(activity -> ContentInstaller.pickInstance(
                         activity, instances, selected,
                         R.string.content_manage_pick_instance, android.R.string.ok,
+                        null,
                         instance -> showList(activity, instance, null, importer)));
             }catch (IOException e) {
                 Tools.showErrorRemote(context, R.string.content_install_failed, e);

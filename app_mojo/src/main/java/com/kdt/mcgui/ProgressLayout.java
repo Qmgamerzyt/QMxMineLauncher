@@ -2,8 +2,10 @@ package com.kdt.mcgui;
 
 
 import android.content.Context;
+import android.graphics.Color;
 import android.util.AttributeSet;
-import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -18,11 +20,11 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import git.artdeell.mojo.R;
 
 import git.artdeell.mojo.progresskeeper.ProgressKeeper;
-import git.artdeell.mojo.progresskeeper.ProgressListener;
 import git.artdeell.mojo.progresskeeper.TaskCountListener;
 import git.artdeell.mojo.utils.DownloadStop;
 
-import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /** Class staring at specific values and automatically show something if the progress is present
@@ -42,6 +44,8 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
     public static final String DATA_MIGRATION = "data_migration";
     public static final String DRIVER_INSTALL = "driver_install";
 
+    private static final AtomicInteger sInstallKeyCounter = new AtomicInteger();
+
     public ProgressLayout(@NonNull Context context) {
         super(context);
         init();
@@ -59,22 +63,47 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
         init();
     }
 
-    private final ArrayList<LayoutProgressListener> mMap = new ArrayList<>();
+    private final HashMap<String, LayoutProgressListener> mRows = new HashMap<>();
     private LinearLayout mLinearLayout;
     private TextView mTaskNumberDisplayer;
     private ImageView mFlipArrow;
-    private TextView mStopButton;
 
+    /** Turns every running key into a row of its own and takes it down once the work ends. */
+    private final ProgressKeeper.KeyedProgressListener mKeyedListener =
+            new ProgressKeeper.KeyedProgressListener() {
+        @Override
+        public void onKeyStarted(String key) {
+            post(() -> {
+                LayoutProgressListener row = mRows.get(key);
+                if(row == null) mRows.put(key, (row = new LayoutProgressListener(key)));
+                row.attach();
+            });
+        }
 
+        @Override
+        public void onKeyUpdated(String key, int progress, int resid, Object... va) {
+            post(() -> {
+                LayoutProgressListener row = mRows.get(key);
+                if(row != null) row.update(progress, resid, va);
+            });
+        }
 
-    public void observe(String progressKey){
-        mMap.add(new LayoutProgressListener(progressKey));
+        @Override
+        public void onKeyEnded(String key) {
+            post(() -> {
+                LayoutProgressListener row = mRows.remove(key);
+                if(row != null) row.detach();
+            });
+        }
+    };
+
+    /** Follow every key there is, so installs running side by side each get a row. */
+    public void observeAll() {
+        ProgressKeeper.addKeyedListener(mKeyedListener);
     }
 
     public void cleanUpObservers() {
-        for(LayoutProgressListener progressListener : mMap) {
-            ProgressKeeper.removeListener(progressListener.progressKey, progressListener);
-        }
+        ProgressKeeper.removeKeyedListener(mKeyedListener);
     }
 
     public boolean hasProcesses(){
@@ -87,10 +116,23 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
         mLinearLayout = findViewById(R.id.progress_linear_layout);
         mTaskNumberDisplayer = findViewById(R.id.progress_textview);
         mFlipArrow = findViewById(R.id.progress_flip_arrow);
-        mStopButton = findViewById(R.id.progress_stop);
         setBackgroundColor(getResources().getColor(R.color.background_bottom_bar));
         setOnClickListener(this);
-        mStopButton.setOnClickListener(this);
+    }
+
+    /** A progress key of its own, so installs running side by side never share a row. */
+    public static String contentInstallKey() {
+        return INSTALL_MODPACK + "@" + sInstallKeyCounter.incrementAndGet();
+    }
+
+    /**
+     * Whether a stop belongs on the row of the given key. Only pure downloads get one:
+     * a mod, pack, shader, world or modpack being installed, or the game itself being
+     * downloaded. The rest of the work unpacks and writes files on disk, and ending it
+     * midway could leave what it works on half made.
+     */
+    public static boolean isStoppableKey(String key) {
+        return DOWNLOAD_GAME.equals(key) || key.startsWith(INSTALL_MODPACK);
     }
 
 
@@ -132,22 +174,8 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
 
     @Override
     public void onClick(View v) {
-        if(v == mStopButton) {
-            stopRunningWork();
-            return;
-        }
         mLinearLayout.setVisibility(mLinearLayout.getVisibility() == GONE ? VISIBLE : GONE);
         mFlipArrow.setRotation(mLinearLayout.getVisibility() == GONE? 0 : 180);
-    }
-
-    /**
-     * Ends the downloads that are running and takes the progress off the screen. The work
-     * notices on its own from here, the bar going away is only the answer to the press.
-     */
-    private void stopRunningWork() {
-        DownloadStop.stopAll();
-        ProgressKeeper.clearAll();
-        Toast.makeText(getContext(), R.string.progress_stopped, Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -162,44 +190,64 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
         return false;
     }
 
-    class LayoutProgressListener implements ProgressListener {
+    /** One row of the list: the progress of its key, and a stop when that work may be ended. */
+    class LayoutProgressListener {
         final String progressKey;
-        final TextProgressBar textView;
-        final LinearLayout.LayoutParams params;
+        final LinearLayout row;
+        final TextProgressBar bar;
+        final TextView stop;
         boolean isAttached = false;
-        public LayoutProgressListener(String progressKey) {
+
+        LayoutProgressListener(String progressKey) {
             this.progressKey = progressKey;
-            textView = new TextProgressBar(getContext());
-            textView.setTextPadding(getContext().getResources().getDimensionPixelOffset(R.dimen._6sdp));
-            params = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, getResources().getDimensionPixelOffset(R.dimen._20sdp));
+            int rowHeight = getResources().getDimensionPixelOffset(R.dimen._20sdp);
+            row = new LinearLayout(getContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+
+            bar = new TextProgressBar(getContext());
+            bar.setTextPadding(getResources().getDimensionPixelOffset(R.dimen._6sdp));
+            row.addView(bar, new LinearLayout.LayoutParams(0, rowHeight, 1f));
+
+            // A stop ends the downloads of this row alone. Work that unpacks and writes
+            // files is left without one, ending it midway could leave a mess
+            stop = new TextView(getContext());
+            stop.setText(R.string.progress_stop);
+            stop.setTextColor(Color.WHITE);
+            stop.setTextSize(TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen._12ssp));
+            stop.setPadding(getResources().getDimensionPixelOffset(R.dimen._8sdp), 0,
+                    getResources().getDimensionPixelOffset(R.dimen._8sdp), 0);
+            stop.setBackgroundResource(android.R.attr.selectableItemBackground);
+            stop.setVisibility(isStoppableKey(progressKey) ? VISIBLE : GONE);
+            stop.setOnClickListener(v -> {
+                DownloadStop.stopKey(progressKey);
+                stop.setEnabled(false);
+                Toast.makeText(getContext(), R.string.progress_stopped, Toast.LENGTH_SHORT).show();
+            });
+            row.addView(stop, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, rowHeight));
+        }
+
+        void attach() {
+            if(isAttached) return;
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    getResources().getDimensionPixelOffset(R.dimen._20sdp));
             params.bottomMargin = getResources().getDimensionPixelOffset(R.dimen._6sdp);
-            ProgressKeeper.addListener(progressKey, this);
-        }
-        @Override
-        public void onProgressStarted() {
-            post(()-> {
-                Log.i("ProgressLayout", "onProgressStarted");
-                if(!isAttached) mLinearLayout.addView(textView, params);
-                isAttached = true;
-            });
+            mLinearLayout.addView(row, params);
+            isAttached = true;
         }
 
-        @Override
-        public void onProgressUpdated(int progress, int resid, Object... va) {
-            post(()-> {
-                textView.setProgress(progress);
-                if(resid != -1) textView.setText(getContext().getString(resid, va));
-                else if(va.length > 0 && va[0] != null)textView.setText((String)va[0]);
-                else textView.setText("");
-            });
+        void update(int progress, int resid, Object... va) {
+            bar.setProgress(progress);
+            if(resid != -1) bar.setText(getContext().getString(resid, va));
+            else if(va.length > 0 && va[0] != null) bar.setText((String) va[0]);
+            else bar.setText("");
         }
 
-        @Override
-        public void onProgressEnded() {
-            post(()-> {
-                mLinearLayout.removeView(textView);
-                isAttached = false;
-            });
+        void detach() {
+            mLinearLayout.removeView(row);
+            isAttached = false;
         }
     }
 }

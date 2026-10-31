@@ -50,8 +50,6 @@ import git.artdeell.mojo.modding.modpacks.models.SearchSort;
 import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.DownloadUtils;
 import git.artdeell.mojo.utils.profiles.VersionSelectorDialog;
-import git.artdeell.mojo.progresskeeper.ProgressKeeper;
-import git.artdeell.mojo.progresskeeper.TaskCountListener;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -95,7 +93,6 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     private TextView[] mTabViews;
 
     private Button mImportButton;
-    private TaskCountListener mTaskCountListener;
     /** The kind the open picker is bringing in for, read back once the files arrive. */
     private ContentKind mPendingImportKind;
 
@@ -202,7 +199,6 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         // You can only access resources after attaching to current context
         mModItemAdapter = new ModItemAdapter(getResources(), modpackApi, this);
-        ProgressKeeper.addTaskCountListener(mModItemAdapter);
         mOverlayTopCache = getResources().getDimension(R.dimen.fragment_padding_medium);
 
         mOverlay = view.findViewById(R.id.search_mod_overlay);
@@ -238,11 +234,10 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         view.findViewById(R.id.content_manage_button).setOnClickListener(v ->
                 InstalledContent.handleManage(requireContext().getApplicationContext(), kind ->
                         startImport(kind != null ? kind : mSearchFilters.kind)));
-        mTaskCountListener = taskCount -> {
-            runOnUiThread(() -> mImportButton.setEnabled(taskCount == 0));
-            return false;
-        };
-        ProgressKeeper.addTaskCountListener(mTaskCountListener);
+        // The screen takes the whole container over, so this is the way back out of
+        // it while the game is running underneath
+        view.findViewById(R.id.search_mod_close).setOnClickListener(v ->
+                Tools.removeCurrentFragment(requireActivity()));
         applyKindArgument(view);
         refreshFilterButton();
 
@@ -252,9 +247,7 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        ProgressKeeper.removeTaskCountListener(mModItemAdapter);
         mRecyclerview.removeOnScrollListener(mOverlayPositionListener);
-        if (mTaskCountListener != null) { ProgressKeeper.removeTaskCountListener(mTaskCountListener); }
     }
 
     @Override

@@ -35,15 +35,13 @@ import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
-import git.artdeell.mojo.progresskeeper.TaskCountListener;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.Future;
 
-public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> implements TaskCountListener {
+public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static final ModItem[] MOD_ITEMS_EMPTY = new ModItem[0];
     private static final int VIEW_TYPE_MOD_ITEM = 0;
     private static final int VIEW_TYPE_LOADING = 1;
@@ -64,7 +62,6 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private SearchFilters mSearchFilters;
     private SearchResult mCurrentResult;
     private boolean mLastPage;
-    private boolean mTasksRunning;
 
 
     public ModItemAdapter(Resources resources, ModpackApi api, SearchResultCallback callback) {
@@ -136,18 +133,10 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         return VIEW_TYPE_LOADING;
     }
 
-    @Override
-    public boolean onUpdateTaskCount(int taskCount) {
-        Tools.runOnUiThread(()->{
-            mTasksRunning = taskCount != 0;
-            for(ViewHolder viewHolder : mViewHolderSet) {
-                viewHolder.updateInstallButtonState();
-            }
-        });
-        return false;
-    }
-
-
+    private Future<?> mTaskInProgress;
+    private SearchFilters mSearchFilters;
+    private SearchResult mCurrentResult;
+    private boolean mLastPage;
     /**
      * Basic viewholder with expension capabilities
      */
@@ -353,7 +342,7 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         private void updateInstallButtonState() {
             if(mExtendedButton != null)
-                mExtendedButton.setEnabled(mInstallEnabled && !mTasksRunning);
+                mExtendedButton.setEnabled(mInstallEnabled);
         }
     }
 

@@ -313,13 +313,15 @@ public class ModrinthApi implements ModpackApi{
     }
 
     @Override
-    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion) throws IOException{
+    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion, String progressKey) throws IOException{
         //TODO considering only modpacks for now
-        return ModpackInstaller.downloadModpack(modDetail, selectedVersion, this::installMrpack);
+        return ModpackInstaller.downloadModpack(modDetail, selectedVersion, progressKey,
+                (modpackFile, instanceDestination) -> installMrpack(modpackFile, instanceDestination, progressKey));
     }
 
     public LoaderInstaller installLocalModpack(String modpackName, File modpackFile, String icon) throws IOException {
-        return ModpackInstaller.installModpack(modpackName, modpackName, modpackFile, icon, this::installMrpack);
+        return ModpackInstaller.installModpack(modpackName, modpackName, modpackFile, icon, ProgressLayout.INSTALL_MODPACK,
+                (pack, destination) -> installMrpack(pack, destination, ProgressLayout.INSTALL_MODPACK));
     }
 
     private static LoaderInstaller createInfo(ModrinthIndex modrinthIndex, File installDestination) throws IOException {
@@ -345,19 +347,20 @@ public class ModrinthApi implements ModpackApi{
         return null;
     }
 
-    private LoaderInstaller installMrpack(File mrpackFile, File instanceDestination) throws IOException {
+    private LoaderInstaller installMrpack(File mrpackFile, File instanceDestination,
+                                          String progressKey) throws IOException {
         try (ZipFile modpackZipFile = new ZipFile(mrpackFile)){
             ModrinthIndex modrinthIndex = Tools.GLOBAL_GSON.fromJson(
                     Tools.read(ZipUtils.getEntryStream(modpackZipFile, "modrinth.index.json")),
                     ModrinthIndex.class);
             try {
-                new ModrinthDownloader().startDownloads(modrinthIndex.files, instanceDestination);
+                new ModrinthDownloader(progressKey).startDownloads(modrinthIndex.files, instanceDestination);
             }catch (InterruptedException e) {
                 throw new IOException("NIY: InterruptedException", e);
             }
-            ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.modpack_download_applying_overrides, 1, 2);
+            ProgressLayout.setProgress(progressKey, 0, R.string.modpack_download_applying_overrides, 1, 2);
             ZipUtils.zipExtract(modpackZipFile, "overrides/", instanceDestination);
-            ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 50, R.string.modpack_download_applying_overrides, 2, 2);
+            ProgressLayout.setProgress(progressKey, 50, R.string.modpack_download_applying_overrides, 2, 2);
             ZipUtils.zipExtract(modpackZipFile, "client-overrides/", instanceDestination);
             return createInfo(modrinthIndex, instanceDestination);
         }
@@ -368,8 +371,8 @@ public class ModrinthApi implements ModpackApi{
     }
 
     static class ModrinthDownloader extends Downloader {
-        public ModrinthDownloader() {
-            super(ProgressLayout.INSTALL_MODPACK);
+        public ModrinthDownloader(String progressKey) {
+            super(progressKey);
         }
 
         protected void startDownloads(ModrinthIndex.ModrinthIndexFile[] indexFiles, File instanceDestination) throws IOException, InterruptedException {

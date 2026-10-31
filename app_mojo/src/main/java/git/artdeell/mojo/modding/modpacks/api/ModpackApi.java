@@ -86,14 +86,15 @@ public interface ModpackApi {
         // Doing this here since when starting installation, the progress does not start immediately
         // which may lead to two concurrent installations (very bad)
         DownloadStop.beginWork();
-        ProgressLayout.setProgress(ProgressLayout.INSTALL_MODPACK, 0, R.string.content_install_preparing);
+        String progressKey = ProgressLayout.contentInstallKey();
+        ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
         MojoApplication.sExecutorService.execute(() -> {
             try {
-                installModpack(modDetail, selectedVersion);
+                installModpack(modDetail, selectedVersion, progressKey);
             }catch (IOException e) {
                 Tools.showErrorRemote(context, R.string.modpack_install_download_failed, e);
             }finally {
-                ProgressLayout.clearProgress(ProgressLayout.INSTALL_MODPACK);
+                ProgressLayout.clearProgress(progressKey);
             }
         });
     }
@@ -106,6 +107,7 @@ public interface ModpackApi {
      * May requires launching the installation of a modloader
      * @param modDetail The mod detail data
      * @param selectedVersion The selected version
+     * @param progressKey The row the progress of this install is filed under
      */
-    LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion) throws IOException;
+    LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion, String progressKey) throws IOException;
 }
