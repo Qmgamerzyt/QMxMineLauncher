@@ -133,10 +133,6 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         return VIEW_TYPE_LOADING;
     }
 
-    private Future<?> mTaskInProgress;
-    private SearchFilters mSearchFilters;
-    private SearchResult mCurrentResult;
-    private boolean mLastPage;
     /**
      * Basic viewholder with expension capabilities
      */

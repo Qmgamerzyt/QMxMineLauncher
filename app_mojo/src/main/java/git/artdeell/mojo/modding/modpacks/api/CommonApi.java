@@ -187,8 +187,8 @@ public class CommonApi implements ModpackApi {
     }
 
     @Override
-    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion) throws IOException {
-        return getModpackApi(modDetail.apiSource).installModpack(modDetail, selectedVersion);
+    public LoaderInstaller installModpack(ModDetail modDetail, int selectedVersion, String progressKey) throws IOException {
+        return getModpackApi(modDetail.apiSource).installModpack(modDetail, selectedVersion, progressKey);
     }
 
     public LoaderInstaller installLocalModpack(String modpackName, File modpackFile, String icon) throws IOException {
