@@ -217,7 +217,14 @@ public class ProgressLayout extends ConstraintLayout implements View.OnClickList
             stop.setTextSize(TypedValue.COMPLEX_UNIT_PX, getResources().getDimension(R.dimen._12ssp));
             stop.setPadding(getResources().getDimensionPixelOffset(R.dimen._8sdp), 0,
                     getResources().getDimensionPixelOffset(R.dimen._8sdp), 0);
-            stop.setBackgroundResource(android.R.attr.selectableItemBackground);
+            // The ripple lives in the theme as an attribute, so it has to be read into
+            // a drawable before it can be set as one
+            TypedValue ripple = new TypedValue();
+            if(getContext().getTheme().resolveAttribute(
+                    android.R.attr.selectableItemBackground, ripple, true)
+                    && ripple.resourceId != 0) {
+                stop.setBackgroundResource(ripple.resourceId);
+            }
             stop.setVisibility(isStoppableKey(progressKey) ? VISIBLE : GONE);
             stop.setOnClickListener(v -> {
                 DownloadStop.stopKey(progressKey);
