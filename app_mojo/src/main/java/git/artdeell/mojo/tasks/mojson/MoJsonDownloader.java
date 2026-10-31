@@ -99,16 +99,26 @@ public class MoJsonDownloader extends Downloader {
                 listener.onDownloadDone(mClassPath.toArray(new File[0]));
             } catch(JsonParseException e) {
                 listener.onDownloadFailed(e); // Handled separately from the general case because it subclasses RuntimeException. Ugh.
-            } catch(DownloadCancelledException e) {
-                // The player ended the download through its row, nothing went wrong
+            } catch(PresentableException e) {
+                // A row stop reaches us wrapped in a PresentableException, which is not a failure
+                if(!wasCancelled(e)) throw e;
             } catch(RuntimeException e) {
                 throw e; // log fatal errors to Google Play
             } catch (InterruptedException ignored) {
             } catch (Exception e) {
-                listener.onDownloadFailed(e);
+                if(!wasCancelled(e)) listener.onDownloadFailed(e);
             }
             ProgressLayout.clearProgress(ProgressLayout.DOWNLOAD_GAME);
         });
+    }
+
+    /** Walks the cause chain looking for the cancellation a row stop raises. */
+    private static boolean wasCancelled(Throwable throwable) {
+        for(int depth = 0; throwable != null && depth < 8; depth++) {
+            if(throwable instanceof DownloadCancelledException) return true;
+            throwable = throwable.getCause();
+        }
+        return false;
     }
 
     /**
@@ -309,7 +319,7 @@ public class MoJsonDownloader extends Downloader {
             if (assetManager != null)
                 NewJREUtil.installNewJreIfNeeded(assetManager, verInfo);
         }catch (IOException e) {
-            throw new PresentableException(R.string.mjdl_disk_error_title, R.string.mjdl_disk_error_subtitle_2);
+            throw new PresentableException(e, R.string.mjdl_disk_error_title, R.string.mjdl_disk_error_subtitle_2);
         }
 
         JAssets assets = downloadAssetsIndex(verInfo);
@@ -529,7 +539,7 @@ public class MoJsonDownloader extends Downloader {
                 throw new PresentableException(R.string.mjdl_json_error_title, R.string.mjdl_json_error_subtitle_3);
             return rv;
         } catch (IOException e) {
-            throw new PresentableException(R.string.mjdl_disk_error_title, R.string.mjdl_disk_error_subtitle_4);
+            throw new PresentableException(e, R.string.mjdl_disk_error_title, R.string.mjdl_disk_error_subtitle_4);
         } catch (JsonParseException e) {
             throw new PresentableException(R.string.mjdl_json_error_title, R.string.mjdl_json_error_subtitle_3);
         }
