@@ -401,6 +401,11 @@
     <string name="ingame_content_import">Import content</string>
     <string name="content_browser_title">Content</string>
     <string name="content_browser_close">Close</string>
+    <string name="content_browser_load_failed">This page could not be loaded. Tap to try again.</string>
+    <string name="content_open_site">Site</string>
+    <string name="content_compat_match">Runs on %1$s, %2$s</string>
+    <string name="content_compat_match_game">Runs on %1$s</string>
+    <string name="content_compat_mismatch">Built for %1$s</string>
     <string name="content_filter_loader">Loader</string>
     <string name="content_filter_sort">Sort by</string>
     <string name="content_filter_categories">Categories</string>

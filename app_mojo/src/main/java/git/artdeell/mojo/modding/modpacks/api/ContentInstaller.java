@@ -74,7 +74,8 @@ public class ContentInstaller {
      */
     public static void handleContentInstallation(Context context, ModpackApi api, ModDetail modDetail,
                                                  int selectedVersion, Map<String, String> titles,
-                                                 Set<String> approvedOptional) {
+                                                 Set<String> approvedOptional,
+                                                 Map<String, Integer> chosenVersions) {
         DownloadStop.beginWork();
         String progressKey = ProgressLayout.contentInstallKey();
         ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
@@ -90,7 +91,8 @@ public class ContentInstaller {
                                 in -> {
                                     install(in, modDetail, selectedVersion, progressKey);
                                     missed.addAll(DependencyResolver.installAll(context, api, in,
-                                            modDetail, selectedVersion, titles, approvedOptional));
+                                            modDetail, selectedVersion, titles, approvedOptional,
+                                            chosenVersions));
                                     return null;
                                 }, missed, progressKey))),
                         () -> ProgressLayout.clearProgress(progressKey));

@@ -8,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewStub;
+import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Spinner;
@@ -15,6 +16,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.fragment.app.FragmentActivity;
 import androidx.core.graphics.drawable.RoundedBitmapDrawable;
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory;
 import androidx.recyclerview.widget.RecyclerView;
@@ -34,7 +36,10 @@ import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.modding.modpacks.models.SearchFilters;
+import git.artdeell.mojo.instances.Instance;
+import git.artdeell.mojo.modding.modpacks.models.SearchLoader;
 import git.artdeell.mojo.modding.modpacks.models.SearchResult;
+import git.artdeell.mojo.utils.profiles.InstanceVersions;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
@@ -62,6 +67,29 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private SearchFilters mSearchFilters;
     private SearchResult mCurrentResult;
     private boolean mLastPage;
+    /* What the instance runs, read once so every row can mark its versions against it */
+    private volatile boolean mInstanceRead;
+    private volatile String mInstanceMcVersion;
+    private volatile String mInstanceLoader;
+
+    /** Reads the version and loader of the selected instance once, off the UI thread. */
+    private void readInstanceTarget() {
+        if(mInstanceRead) return;
+        synchronized(this) {
+            if(mInstanceRead) return;
+            try {
+                Instance instance = git.artdeell.mojo.instances.Instances.loadSelectedInstance();
+                if(instance != null) {
+                    mInstanceMcVersion = InstanceVersions.resolveGameVersion(instance.versionId);
+                    SearchLoader loader = InstanceVersions.resolveLoader(instance.versionId);
+                    mInstanceLoader = loader.display.isEmpty() ? null : loader.display;
+                }
+            } catch (RuntimeException ignored) {
+                // Without an instance the rows simply carry no mark
+            }
+            mInstanceRead = true;
+        }
+    }
 
 
     public ModItemAdapter(Resources resources, ModpackApi api, SearchResultCallback callback) {
@@ -146,6 +174,8 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private Spinner mExtendedSpinner;
         private Button mExtendedButton;
         private TextView mExtendedErrorTextView;
+        private TextView mCompatTextView;
+        private View mSiteButton;
         private Future<?> mExtensionFuture;
         private Bitmap mThumbnailBitmap;
         private ImageReceiver mImageReceiver;
@@ -164,6 +194,25 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     mExtendedButton = mExtendedLayout.findViewById(R.id.mod_extended_select_version_button);
                     mExtendedSpinner = mExtendedLayout.findViewById(R.id.mod_extended_version_spinner);
                     mExtendedErrorTextView = mExtendedLayout.findViewById(R.id.mod_extended_error_textview);
+                    mCompatTextView = mExtendedLayout.findViewById(R.id.mod_extended_compat);
+                    mSiteButton = mExtendedLayout.findViewById(R.id.mod_extended_site_button);
+                    mSiteButton.setOnClickListener(v2 -> {
+                        // The page of the project opens inside the launcher, never outside of it
+                        String pageUrl = mModItem == null ? null : mModItem.webPageUrl();
+                        if(pageUrl != null && v2.getContext() instanceof FragmentActivity) {
+                            Tools.openInAppBrowser((FragmentActivity) v2.getContext(), pageUrl);
+                        }
+                    });
+                    mExtendedSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                        @Override
+                        public void onItemSelected(AdapterView<?> parent, View view,
+                                                   int position, long id) {
+                            markCompatibility();
+                        }
+
+                        @Override
+                        public void onNothingSelected(AdapterView<?> parent) { }
+                    });
 
                     mExtendedButton.setOnClickListener(v1 -> {
                         int position = mExtendedSpinner.getSelectedItemPosition();
@@ -175,9 +224,9 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             // anything is installed, the required ones among them marked
                             // as such and kept ticked
                             DependencyResolver.prompt(appContext, mModpackApi, mModDetail, position,
-                                    (titles, approved) -> ContentInstaller.handleContentInstallation(
+                                    (titles, approved, versions) -> ContentInstaller.handleContentInstallation(
                                             appContext, mModpackApi, mModDetail, position,
-                                            titles, approved));
+                                            titles, approved, versions));
                         }
                     });
                     mExtendedSpinner.setAdapter(mLoadingAdapter);
@@ -194,6 +243,7 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                      * Let me explain:
                      */
                     mExtensionFuture = new SelfReferencingFuture(myFuture -> {
+                        readInstanceTarget();
                         /*
                          * While we are sitting in the function below doing networking, the view might have already gotten recycled.
                          * If we didn't use a Future, we would have extended a ViewHolder with completely unrelated content
@@ -271,15 +321,19 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             if(detailedItem != null) {
                 setInstallEnabled(true);
                 mExtendedErrorTextView.setVisibility(View.GONE);
+                mSiteButton.setVisibility(mModItem != null && mModItem.webPageUrl() != null
+                        ? View.VISIBLE : View.GONE);
                 mVersionAdapter.setObjects(Arrays.asList(detailedItem.versionNames));
                 mExtendedSpinner.setAdapter(mVersionAdapter);
                 // The version the instance can run is the one the list starts on, so
                 // an install lands on a fitting file without searching through it
                 SearchFilters filters = mSearchFilters;
-                if(filters != null) {
-                    mExtendedSpinner.setSelection(detailedItem.bestVersionIndex(
-                            filters.mcVersion, filters.loader));
-                }
+                String mcVersion = mInstanceMcVersion != null
+                        ? mInstanceMcVersion : (filters != null ? filters.mcVersion : null);
+                String loader = mInstanceLoader != null
+                        ? mInstanceLoader : (filters != null ? filters.loader : null);
+                mExtendedSpinner.setSelection(detailedItem.bestVersionIndex(mcVersion, loader));
+                markCompatibility();
             } else {
                 closeDetailedView();
                 setInstallEnabled(false);
@@ -287,6 +341,43 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 mExtendedSpinner.setAdapter(null);
                 mVersionAdapter.setObjects(null);
             }
+        }
+
+        /** Marks whether the version the spinner rests on runs on the instance, or says what it was built for. */
+        private void markCompatibility() {
+            if(mCompatTextView == null) return;
+            if(mModDetail == null || mInstanceMcVersion == null
+                    || mModDetail.mcVersionNames == null || mModDetail.versionNames == null) {
+                mCompatTextView.setVisibility(View.GONE);
+                return;
+            }
+            int position = mExtendedSpinner.getSelectedItemPosition();
+            if(position < 0 || position >= mModDetail.versionNames.length
+                    || position >= mModDetail.mcVersionNames.length) {
+                mCompatTextView.setVisibility(View.GONE);
+                return;
+            }
+            String builtFor = mModDetail.mcVersionNames[position];
+            if(builtFor == null || builtFor.isEmpty()) {
+                mCompatTextView.setVisibility(View.GONE);
+                return;
+            }
+            if(builtFor.equals(mInstanceMcVersion)
+                    && (mInstanceLoader == null || mModDetail.holdsLoader(position, mInstanceLoader))) {
+                mCompatTextView.setText(mInstanceLoader == null
+                        ? mCompatTextView.getContext().getString(
+                                R.string.content_compat_match_game, mInstanceMcVersion)
+                        : mCompatTextView.getContext().getString(
+                                R.string.content_compat_match, mInstanceMcVersion, mInstanceLoader));
+                mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
+                        .getColor(R.color.compat_green));
+            } else {
+                mCompatTextView.setText(mCompatTextView.getContext().getString(
+                        R.string.content_compat_mismatch, builtFor));
+                mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
+                        .getColor(R.color.secondary_text));
+            }
+            mCompatTextView.setVisibility(View.VISIBLE);
         }
 
         private void openDetailedView() {

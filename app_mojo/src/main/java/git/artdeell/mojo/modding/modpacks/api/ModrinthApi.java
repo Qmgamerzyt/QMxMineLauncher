@@ -120,14 +120,17 @@ public class ModrinthApi implements ModpackApi{
             ContentKind hitKind = ContentKind.fromModrinthType(hit.get("project_type").getAsString());
             // A hit from a neighbouring kind belongs in a different folder of the instance
             if(hitKind != searchFilters.kind) continue;
-            items.add(new ModItem(
+            ModItem item = new ModItem(
                     Constants.SOURCE_MODRINTH,
                     hitKind,
                     hit.get("project_id").getAsString(),
                     hit.get("title").getAsString(),
                     hit.get("description").getAsString(),
                     hit.get("icon_url").getAsString()
-            ));
+            );
+            item.webUrl = "https://modrinth.com/"+hit.get("project_type").getAsString()
+                    +"/"+hit.get("slug").getAsString();
+            items.add(item);
         }
         if(modrinthSearchResult == null) modrinthSearchResult = new ModrinthSearchResult();
         modrinthSearchResult.previousOffset += responseHits.size();

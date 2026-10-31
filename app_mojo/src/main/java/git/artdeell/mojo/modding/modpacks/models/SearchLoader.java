@@ -6,23 +6,26 @@ package git.artdeell.mojo.modding.modpacks.models;
  * spellings live here.
  */
 public enum SearchLoader {
-    ANY("", 0),
-    FABRIC("fabric", 4),
-    FORGE("forge", 1),
-    NEOFORGE("neoforge", 6),
-    QUILT("quilt", 5),
+    ANY("", 0, ""),
+    FABRIC("fabric", 4, "Fabric"),
+    FORGE("forge", 1, "Forge"),
+    NEOFORGE("neoforge", 6, "NeoForge"),
+    QUILT("quilt", 5, "Quilt"),
     // Shaders do not run on a mod loader, these two are what they run on instead
-    IRIS("iris", 0),
-    OPTIFINE("optifine", 0);
+    IRIS("iris", 0, "Iris"),
+    OPTIFINE("optifine", 0, "OptiFine");
 
     /** Value of the Modrinth categories facet, empty when the loader is not narrowed. */
     public final String facet;
     /** Value of the CurseForge modLoaderType parameter, zero when CurseForge has no code for it. */
     public final int curseforgeCode;
+    /** The name players know the loader by, empty for the un narrowed one. */
+    public final String display;
 
-    SearchLoader(String facet, int curseforgeCode) {
+    SearchLoader(String facet, int curseforgeCode, String display) {
         this.facet = facet;
         this.curseforgeCode = curseforgeCode;
+        this.display = display;
     }
 
     /**

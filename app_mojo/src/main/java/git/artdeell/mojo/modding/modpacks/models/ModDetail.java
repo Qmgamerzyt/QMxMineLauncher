@@ -75,7 +75,7 @@ public class ModDetail extends ModItem {
     }
 
     /** Whether one version was published for the given loader, matched without case. */
-    private boolean holdsLoader(int index, String loaderName) {
+    public boolean holdsLoader(int index, String loaderName) {
         if(loaderNames == null || index >= loaderNames.length) return false;
         String declared = loaderNames[index];
         if(declared == null || declared.isEmpty()) return false;
