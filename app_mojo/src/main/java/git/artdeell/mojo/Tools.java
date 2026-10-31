@@ -49,6 +49,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import git.artdeell.mojo.awt.AWTActivity;
+import git.artdeell.mojo.fragments.WebBrowserFragment;
 import git.artdeell.mojo.game.GameActivity;
 import git.artdeell.mojo.game.renderer.RenderSpec;
 import git.artdeell.mojo.instances.Instance;
@@ -751,6 +752,18 @@ public final class Tools {
                 .setReorderingAllowed(true)
                 .addToBackStack(fragmentClass.getName())
                 .replace(R.id.container_fragment, fragmentClass, bundle, fragmentTag).commit();
+    }
+
+    /** Opens a page inside the launcher so a site never takes the player out of the app. */
+    public static void openInAppBrowser(FragmentActivity fragmentActivity, String url) {
+        if(fragmentActivity == null || !isValidString(url)) return;
+        if(fragmentActivity.findViewById(R.id.container_fragment) != null) {
+            swapFragment(fragmentActivity, WebBrowserFragment.class, WebBrowserFragment.TAG,
+                    WebBrowserFragment.argsFor(url));
+        } else {
+            fragmentActivity.startActivity(new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url)));
+        }
     }
 
     public static void backToMainMenu(FragmentActivity fragmentActivity) {
