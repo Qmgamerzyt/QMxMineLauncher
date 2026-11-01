@@ -350,48 +350,63 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         /** Marks whether the version the spinner rests on runs on the instance, or says what it was built for. */
         private void markCompatibility() {
             if(mCompatTextView == null) return;
-            if(mModDetail == null || mInstanceMcVersion == null
-                    || mModDetail.mcVersionNames == null || mModDetail.versionNames == null) {
+            // The instance is the answer when it is known, the search filters stand
+            // in for it while it is not
+            SearchFilters filters = mSearchFilters;
+            String mcVersion = mInstanceMcVersion != null
+                    ? mInstanceMcVersion : (filters != null ? filters.mcVersion : null);
+            String loader = mInstanceLoader != null
+                    ? mInstanceLoader : (filters != null ? filters.loader : null);
+            if(mModDetail == null || mcVersion == null || mcVersion.isEmpty()
+                    || mModDetail.versionNames == null) {
                 mCompatTextView.setVisibility(View.GONE);
                 return;
             }
             int position = mExtendedSpinner.getSelectedItemPosition();
-            if(position < 0 || position >= mModDetail.versionNames.length
-                    || position >= mModDetail.mcVersionNames.length) {
+            if(position < 0 || position >= mModDetail.versionNames.length) {
                 mCompatTextView.setVisibility(View.GONE);
                 return;
             }
-            String builtFor = mModDetail.mcVersionNames[position];
-            if(builtFor == null || builtFor.isEmpty()) {
+            // Nothing to write when the host named no game version for the file
+            String builtFor = mModDetail.firstMcVersion(position);
+            if(builtFor.isEmpty()) {
                 mCompatTextView.setVisibility(View.GONE);
                 return;
             }
-            if(builtFor.equals(mInstanceMcVersion)
-                    && (mInstanceLoader == null || mModDetail.holdsLoader(position, mInstanceLoader))) {
-                mCompatTextView.setText(mInstanceLoader == null
-                        ? mCompatTextView.getContext().getString(
-                                R.string.content_compat_match_game, mInstanceMcVersion)
-                        : mCompatTextView.getContext().getString(
-                                R.string.content_compat_match, mInstanceMcVersion, mInstanceLoader));
-                mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
-                        .getColor(R.color.compat_green));
-                // A file that fits wears the mark, one that does not stays a plain line
-                mCompatTextView.setBackgroundResource(R.drawable.badge_compat_fit);
-                mCompatTextView.setPadding(
-                        mCompatTextView.getContext().getResources()
-                                .getDimensionPixelOffset(R.dimen.padding_small),
-                        0,
-                        mCompatTextView.getContext().getResources()
-                                .getDimensionPixelOffset(R.dimen.padding_small),
-                        0);
+            if(!mModDetail.holdsMcVersion(position, mcVersion)
+                    || (ModDetail.loaderAsked(loader) && !mModDetail.holdsLoader(position, loader))) {
+                markPlain(mCompatTextView.getContext().getString(
+                        R.string.content_compat_mismatch, builtFor));
+                return;
+            }
+            if(ModDetail.loaderAsked(loader)) {
+                mCompatTextView.setText(mCompatTextView.getContext().getString(
+                        R.string.content_compat_match, mcVersion, loader));
             } else {
                 mCompatTextView.setText(mCompatTextView.getContext().getString(
-                        R.string.content_compat_mismatch, builtFor));
-                mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
-                        .getColor(R.color.secondary_text));
-                mCompatTextView.setBackgroundResource(0);
-                mCompatTextView.setPadding(0, 0, 0, 0);
+                        R.string.content_compat_match_game, mcVersion));
             }
+            mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
+                    .getColor(R.color.compat_green));
+            // A file that fits wears the mark, one that does not stays a plain line
+            mCompatTextView.setBackgroundResource(R.drawable.badge_compat_fit);
+            mCompatTextView.setPadding(
+                    mCompatTextView.getContext().getResources()
+                            .getDimensionPixelOffset(R.dimen.padding_small),
+                    0,
+                    mCompatTextView.getContext().getResources()
+                            .getDimensionPixelOffset(R.dimen.padding_small),
+                    0);
+            mCompatTextView.setVisibility(View.VISIBLE);
+        }
+
+        /** Sets the line back to a plain one, carrying what the file was built for. */
+        private void markPlain(String text) {
+            mCompatTextView.setText(text);
+            mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
+                    .getColor(R.color.secondary_text));
+            mCompatTextView.setBackgroundResource(0);
+            mCompatTextView.setPadding(0, 0, 0, 0);
             mCompatTextView.setVisibility(View.VISIBLE);
         }
 

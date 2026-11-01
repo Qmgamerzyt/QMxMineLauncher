@@ -49,6 +49,14 @@ import java.util.zip.ZipFile;
 
 public class CurseforgeApi implements ModpackApi{
     private static final Pattern sMcVersionPattern = Pattern.compile("([0-9]+)\\.([0-9]+)\\.?([0-9]+)?");
+
+    /** Whether the name carries a digit, told apart from the loader names in one array. */
+    private static boolean containsDigit(String value) {
+        for(int i = 0; i < value.length(); i++) {
+            if(Character.isDigit(value.charAt(i))) return true;
+        }
+        return false;
+    }
     private static final int ALGO_SHA_1 = 1;
     // Stolen from
     // https://github.com/AnzhiZhang/CurseForgeModpackDownloader/blob/6cb3f428459f0cc8f444d16e54aea4cd1186fd7b/utils/requester.py#L93
@@ -194,23 +202,38 @@ public class CurseforgeApi implements ModpackApi{
             JsonElement downloadUrl = modDetail.get("downloadUrl");
             versionUrls[i] = downloadUrl == null || downloadUrl.isJsonNull() ? null : downloadUrl.getAsString();
 
-            mcVersionNames[i] = "";
+            // One array carries both: entries that look like a game version are the
+            // Minecraft versions the file was built for, every other entry names a
+            // loader. The whole list is kept on each side so the instance can be
+            // matched against every version the file answers to
+            StringBuilder mcBuilt = new StringBuilder();
+            StringBuilder loadersBuilt = new StringBuilder();
             JsonArray gameVersions = GsonJsonUtils.getJsonArraySafe(modDetail, "gameVersions");
             if(gameVersions != null) {
                 for(JsonElement jsonElement : gameVersions) {
-                    String gameVersion = jsonElement.getAsString();
-                    if(!sMcVersionPattern.matcher(gameVersion).matches()) {
+                    if(jsonElement == null || jsonElement.isJsonNull()) continue;
+                    String gameVersion;
+                    try {
+                        gameVersion = jsonElement.getAsString();
+                    } catch (RuntimeException e) {
                         continue;
                     }
-                    mcVersionNames[i] = gameVersion;
-                    break;
+                    if(gameVersion.isEmpty()) continue;
+                    // A snapshot like 24w14a is a game version too, though it never
+                    // matches the release pattern; entries carrying no digit at all
+                    // are the loaders, the way every CurseForge client reads them
+                    if(sMcVersionPattern.matcher(gameVersion).matches()
+                            || containsDigit(gameVersion)) {
+                        if(mcBuilt.length() > 0) mcBuilt.append(',');
+                        mcBuilt.append(gameVersion);
+                    } else {
+                        if(loadersBuilt.length() > 0) loadersBuilt.append(',');
+                        loadersBuilt.append(gameVersion);
+                    }
                 }
             }
-
-            // CurseForge marks the loader a file was built for with a code of its own,
-            // zero standing for a file that goes with any of them
-            loaderNames[i] = SearchLoader.fromCurseforgeCode(
-                    GsonJsonUtils.getIntSafe(modDetail, "modLoader", 0)).name();
+            mcVersionNames[i] = mcBuilt.toString();
+            loaderNames[i] = loadersBuilt.toString();
 
             hashes[i] = getSha1FromModData(modDetail);
             dependencies[i] = readDependencies(modDetail);

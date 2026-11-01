@@ -184,10 +184,9 @@ public class ModrinthApi implements ModpackApi{
         for (int i=0; i<response.size(); ++i) {
             JsonObject version = response.get(i).getAsJsonObject();
             names[i] = readString(version, "name");
-            // A version may name several Minecraft versions and several loaders, the
-            // first of each is the one the row is written for, the rest is kept for
-            // matching the instance against the list
-            mcNames[i] = readArrayFirst(version, "game_versions");
+            // A version may name several Minecraft versions and several loaders;
+            // every one of them is kept, the instance is matched against the list
+            mcNames[i] = readJoinedArray(version, "game_versions");
             loaders[i] = readJoinedArray(version, "loaders");
             dependencies[i] = readDependencies(version);
             JsonArray files = version.getAsJsonArray("files");
@@ -282,17 +281,6 @@ public class ModrinthApi implements ModpackApi{
     private static JsonArray readArray(JsonObject object, String key) {
         if(object == null || !object.has(key) || !object.get(key).isJsonArray()) return null;
         return object.getAsJsonArray(key);
-    }
-
-    /** The first entry of a string array field, or an empty string when there is none. */
-    private static String readArrayFirst(JsonObject object, String key) {
-        JsonArray array = readArray(object, key);
-        if(array == null || array.size() == 0 || array.get(0).isJsonNull()) return "";
-        try {
-            return array.get(0).getAsString();
-        }catch (RuntimeException e) {
-            return "";
-        }
     }
 
     /** Every entry of a string array field joined by a comma, or an empty string. */

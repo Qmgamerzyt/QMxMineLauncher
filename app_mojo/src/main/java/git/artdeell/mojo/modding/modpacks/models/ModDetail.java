@@ -27,10 +27,12 @@ public class ModDetail extends ModItem {
         this.versionHashes = hashes;
         this.versionDependencies = versionDependencies;
 
-        // Add the mc version to the version model
+        // The row names the newest game version it was built for; the whole list
+        // stays in mcVersionNames, where the matching reads it
         for (int i=0; i<versionNames.length; i++){
-            if (!versionNames[i].contains(mcVersionNames[i]))
-                versionNames[i] += " - " + mcVersionNames[i];
+            String builtFor = firstMcVersion(i);
+            if (!builtFor.isEmpty() && !versionNames[i].contains(builtFor))
+                versionNames[i] += " - " + builtFor;
         }
     }
 
@@ -47,14 +49,12 @@ public class ModDetail extends ModItem {
     public int bestVersionIndex(String mcVersion, String loaderName) {
         boolean wantMcVersion = mcVersion != null && !mcVersion.isEmpty();
         // A search for any loader has no version to favour on that account
-        boolean wantLoader = loaderName != null && !loaderName.isEmpty()
-                && !"ANY".equalsIgnoreCase(loaderName);
+        boolean wantLoader = loaderAsked(loaderName);
         int bestIndex = 0;
         int bestScore = -1;
         for(int i = 0; i < versionNames.length; i++) {
             int score = 0;
-            if(wantMcVersion && i < mcVersionNames.length
-                    && mcVersion.equals(mcVersionNames[i])) score += 2;
+            if(wantMcVersion && holdsMcVersion(i, mcVersion)) score += 2;
             if(wantLoader && holdsLoader(i, loaderName)) score += 1;
             if(score > bestScore) {
                 bestScore = score;
@@ -66,18 +66,45 @@ public class ModDetail extends ModItem {
 
     /**
      * Whether each version was built for the given game and loader, so a list may
-     * mark the ones the instance can run. Null when the game version is unknown or
-     * the host says nothing about what versions were built for.
+     * mark the ones the instance can run. A file counts when it names the game
+     * version anywhere in its list, and the loader only weighs in when one is
+     * actually asked for. Null when the game version is unknown.
      */
     public boolean[] compatibilityWith(String mcVersion, String loaderName) {
         if(mcVersion == null || mcVersion.isEmpty() || mcVersionNames == null) return null;
+        boolean wantLoader = loaderAsked(loaderName);
         boolean[] flags = new boolean[versionNames.length];
         for(int i = 0; i < flags.length; i++) {
-            String builtFor = i < mcVersionNames.length ? mcVersionNames[i] : null;
-            flags[i] = mcVersion.equals(builtFor)
-                    && (loaderName == null || loaderName.isEmpty() || holdsLoader(i, loaderName));
+            flags[i] = holdsMcVersion(i, mcVersion)
+                    && (!wantLoader || holdsLoader(i, loaderName));
         }
         return flags;
+    }
+
+    /** Whether the version at the given index names the game version anywhere in its list. */
+    public boolean holdsMcVersion(int index, String mcVersion) {
+        if(mcVersion == null || mcVersion.isEmpty() || mcVersionNames == null
+                || index < 0 || index >= mcVersionNames.length) return false;
+        String declared = mcVersionNames[index];
+        if(declared == null || declared.isEmpty()) return false;
+        for(String entry : declared.split(",")) {
+            if(mcVersion.equalsIgnoreCase(entry.trim())) return true;
+        }
+        return false;
+    }
+
+    /** Whether a loader was asked for at all; ANY and nothing leave the check out. */
+    public static boolean loaderAsked(String loaderName) {
+        return loaderName != null && !loaderName.isEmpty()
+                && !"ANY".equalsIgnoreCase(loaderName);
+    }
+
+    /** The newest game version the version at the given index was built for. */
+    public String firstMcVersion(int index) {
+        if(mcVersionNames == null || index < 0 || index >= mcVersionNames.length) return "";
+        String declared = mcVersionNames[index];
+        if(declared == null || declared.isEmpty()) return "";
+        return declared.split(",")[0].trim();
     }
 
     /**
@@ -92,7 +119,8 @@ public class ModDetail extends ModItem {
 
     /** Whether one version was published for the given loader, matched without case. */
     public boolean holdsLoader(int index, String loaderName) {
-        if(loaderNames == null || index >= loaderNames.length) return false;
+        if(loaderName == null || loaderName.isEmpty() || loaderNames == null
+                || index < 0 || index >= loaderNames.length) return false;
         String declared = loaderNames[index];
         if(declared == null || declared.isEmpty()) return false;
         for(String loader : declared.split(",")) {
