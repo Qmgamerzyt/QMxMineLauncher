@@ -366,6 +366,8 @@ public class SearchModFragment extends Fragment implements ModItemAdapter.Search
         for(TextView tab : mTabViews) {
             ContentKind kind = (ContentKind) tab.getTag();
             boolean selected = kind == mSearchFilters.kind;
+            // The chip behind the tab fills in on its own once the tab carries the state
+            tab.setSelected(selected);
             tab.setTextColor(selected ? selectedColor : idleColor);
             tab.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
         }

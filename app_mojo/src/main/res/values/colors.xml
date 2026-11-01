@@ -15,6 +15,11 @@
     <color name="primary_text">#FFFFFF</color>
     <color name="secondary_text">#B2B2B2</color>
     <color name="compat_green">#66BB6A</color>
+    <color name="search_chip_idle_bg">#222222</color>
+    <color name="search_chip_idle_stroke">#464646</color>
+    <color name="search_chip_pressed_bg">#2E2E2E</color>
+    <color name="search_chip_pressed_stroke">#5E5E5E</color>
+    <color name="search_chip_selected_bg">#3891DFFB</color>
     <color name="compat_badge_bg">#3366BB6A</color>
     <color name="dependency_badge_bg">#2A91DFFB</color>
     <color name="dependency_field_bg">#222222</color>
