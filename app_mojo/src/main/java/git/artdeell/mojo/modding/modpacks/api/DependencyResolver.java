@@ -13,6 +13,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.AppCompatSpinner;
 import androidx.fragment.app.FragmentActivity;
 
+import com.kdt.mcgui.ProgressLayout;
+
 import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.instances.Instance;
@@ -214,11 +216,11 @@ public class DependencyResolver {
     public static List<String> installAll(Context context, ModpackApi api, Instance instance,
                                           ModDetail detail, int selectedVersion,
                                           Map<String, String> titles, Set<String> approvedOptional,
-                                          Map<String, Integer> chosenVersions)
+                                          Map<String, Integer> chosenVersions, String progressKey)
             throws IOException {
         try {
             return walk(context, api, instance, detail, selectedVersion, titles, approvedOptional,
-                    chosenVersions);
+                    chosenVersions, progressKey);
         } catch (RuntimeException e) {
             // The content itself is in by the time the walk runs, so a walk that falls
             // over still leaves a report rather than going quiet
@@ -232,7 +234,7 @@ public class DependencyResolver {
     private static List<String> walk(Context context, ModpackApi api, Instance instance,
                                      ModDetail detail, int selectedVersion,
                                      Map<String, String> titles, Set<String> approvedOptional,
-                                     Map<String, Integer> chosenVersions)
+                                     Map<String, Integer> chosenVersions, String progressKey)
             throws IOException {
         ArrayList<String> reports = new ArrayList<>();
         if(!detail.kind.installsIntoExistingInstance()) return reports;
@@ -240,6 +242,8 @@ public class DependencyResolver {
         String loader = InstanceVersions.resolveLoader(instance.versionId).name();
         ContentKind kind = kindFor(detail.kind);
         ContentIndex index = ContentIndex.read(instance.getGameDirectory());
+        // The main row carries the walk, so stopping through it ends what comes next
+        long mainGeneration = DownloadStop.generationOf(progressKey);
         LinkedHashMap<String, ContentDependency> missed = new LinkedHashMap<>();
         LinkedHashSet<String> visited = new LinkedHashSet<>();
         ArrayDeque<ContentDependency[]> pending = new ArrayDeque<>();
@@ -249,6 +253,7 @@ public class DependencyResolver {
             for(ContentDependency dependency : pending.removeFirst()) {
                 if(placed >= MAX_DEPENDENCIES) break;
                 DownloadStop.checkWork();
+                DownloadStop.checkKey(progressKey, mainGeneration);
                 // An optional project is only brought when it was offered and ticked,
                 // and one that turns up as required further down comes regardless
                 if(!dependency.required && (approvedOptional == null
@@ -267,7 +272,7 @@ public class DependencyResolver {
                     // the one that fits the instance is looked for when there was no pick
                     int versionIndex = chosenVersion(chosenVersions, dependency,
                             dependencyDetail, mcVersion, loader);
-                    ContentInstaller.install(instance, dependencyDetail, versionIndex);
+                    installDependency(instance, dependencyDetail, versionIndex);
                     placed++;
                     index = ContentIndex.read(instance.getGameDirectory());
                     if(dependency.required) {
@@ -290,6 +295,18 @@ public class DependencyResolver {
                     named(titles, dependency)));
         }
         return reports;
+    }
+
+    /** One row for this dependency, taken down whether the file lands or not. */
+    private static void installDependency(Instance instance, ModDetail dependencyDetail,
+                                          int versionIndex) throws IOException {
+        String progressKey = ProgressLayout.contentInstallKey();
+        try {
+            ProgressLayout.setProgress(progressKey, 0, R.string.content_install_preparing);
+            ContentInstaller.install(instance, dependencyDetail, versionIndex, progressKey);
+        } finally {
+            ProgressLayout.clearProgress(progressKey);
+        }
     }
 
     /** The version index the player picked for a dependency, or the fittest one when there was no pick. */

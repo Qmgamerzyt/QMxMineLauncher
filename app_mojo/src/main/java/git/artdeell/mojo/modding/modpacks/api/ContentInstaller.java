@@ -90,9 +90,12 @@ public class ContentInstaller {
                         instance -> MojoApplication.sExecutorService.execute(() -> installInto(context, instance,
                                 in -> {
                                     install(in, modDetail, selectedVersion, progressKey);
+                                    // The main file is in, the row now belongs to the walk
+                                    ProgressLayout.setProgress(progressKey, 0,
+                                            R.string.content_install_dependencies);
                                     missed.addAll(DependencyResolver.installAll(context, api, in,
                                             modDetail, selectedVersion, titles, approvedOptional,
-                                            chosenVersions));
+                                            chosenVersions, progressKey));
                                     return null;
                                 }, missed, progressKey))),
                         () -> ProgressLayout.clearProgress(progressKey));
@@ -391,17 +394,12 @@ public class ContentInstaller {
     }
 
     /**
-     * Download one version of a content item into the folder of the given instance.
-     * A file this project had installed before is removed, so an update never leaves
-     * two copies of the same content behind.
+     * Download one version of a content item into the folder of the given instance,
+     * filing its progress under the row the given key names. A file this project had
+     * installed before is removed, so an update never leaves two copies behind.
      *
      * @return the file, or the world folder for a world, that the instance ended up with
      */
-    public static File install(Instance instance, ModDetail detail, int selectedVersion) throws IOException {
-        return install(instance, detail, selectedVersion, ProgressLayout.contentInstallKey());
-    }
-
-    /** The same install, filing its progress under the row the given key names. */
     public static File install(Instance instance, ModDetail detail, int selectedVersion,
                                String progressKey) throws IOException {
         ContentKind kind = detail.kind;
