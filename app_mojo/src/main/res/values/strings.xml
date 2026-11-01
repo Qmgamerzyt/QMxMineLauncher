@@ -377,6 +377,7 @@
     <string name="content_dependencies_title">These come along</string>
     <string name="content_dependencies_required">%1$s (needed)</string>
     <string name="content_dependencies_optional">%1$s</string>
+    <string name="content_dependencies_needed_badge">NEEDED</string>
     <string name="content_dependencies_failed">Could not install %1$s</string>
     <string name="content_dependencies_report_title">Dependencies</string>
     <string name="content_dependencies_report">These projects did not make it into the instance:</string>
@@ -404,6 +405,7 @@
     <string name="content_browser_load_failed">This page could not be loaded. Tap to try again.</string>
     <string name="content_open_site">Site</string>
     <string name="content_compat_match">Runs on %1$s, %2$s</string>
+    <string name="content_compat_badge_fit">FITS THIS INSTANCE</string>
     <string name="content_compat_match_game">Runs on %1$s</string>
     <string name="content_compat_mismatch">Built for %1$s</string>
     <string name="content_filter_loader">Loader</string>

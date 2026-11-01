@@ -181,12 +181,13 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private ImageReceiver mImageReceiver;
         private boolean mInstallEnabled;
 
-        /* Used to display available versions of the mod(pack) */
-        private final SimpleArrayAdapter<String> mVersionAdapter = new SimpleArrayAdapter<>(null);
+        /* Used to display available versions of the mod(pack), each marked when it fits */
+        private final VersionEntryAdapter mVersionAdapter;
 
         public ViewHolder(View view) {
             super(view);
             mViewHolderSet.add(this);
+            mVersionAdapter = new VersionEntryAdapter(view.getContext());
             view.setOnClickListener(v -> {
                 if(!hasExtended()){
                     // Inflate the ViewStub
@@ -323,15 +324,18 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 mExtendedErrorTextView.setVisibility(View.GONE);
                 mSiteButton.setVisibility(mModItem != null && mModItem.webPageUrl() != null
                         ? View.VISIBLE : View.GONE);
-                mVersionAdapter.setObjects(Arrays.asList(detailedItem.versionNames));
-                mExtendedSpinner.setAdapter(mVersionAdapter);
-                // The version the instance can run is the one the list starts on, so
-                // an install lands on a fitting file without searching through it
+                // Every version the project was published in is listed, the ones built
+                // for the instance carrying a mark of their own
                 SearchFilters filters = mSearchFilters;
                 String mcVersion = mInstanceMcVersion != null
                         ? mInstanceMcVersion : (filters != null ? filters.mcVersion : null);
                 String loader = mInstanceLoader != null
                         ? mInstanceLoader : (filters != null ? filters.loader : null);
+                mVersionAdapter.setVersions(Arrays.asList(detailedItem.versionNames),
+                        detailedItem.compatibilityWith(mcVersion, loader));
+                mExtendedSpinner.setAdapter(mVersionAdapter);
+                // The version the instance can run is the one the list starts on, so
+                // an install lands on a fitting file without searching through it
                 mExtendedSpinner.setSelection(detailedItem.bestVersionIndex(mcVersion, loader));
                 markCompatibility();
             } else {
@@ -339,7 +343,7 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 setInstallEnabled(false);
                 mExtendedErrorTextView.setVisibility(View.VISIBLE);
                 mExtendedSpinner.setAdapter(null);
-                mVersionAdapter.setObjects(null);
+                mVersionAdapter.setVersions(null, null);
             }
         }
 
@@ -371,11 +375,22 @@ public class ModItemAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                                 R.string.content_compat_match, mInstanceMcVersion, mInstanceLoader));
                 mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
                         .getColor(R.color.compat_green));
+                // A file that fits wears the mark, one that does not stays a plain line
+                mCompatTextView.setBackgroundResource(R.drawable.badge_compat_fit);
+                mCompatTextView.setPadding(
+                        mCompatTextView.getContext().getResources()
+                                .getDimensionPixelOffset(R.dimen.padding_small),
+                        0,
+                        mCompatTextView.getContext().getResources()
+                                .getDimensionPixelOffset(R.dimen.padding_small),
+                        0);
             } else {
                 mCompatTextView.setText(mCompatTextView.getContext().getString(
                         R.string.content_compat_mismatch, builtFor));
                 mCompatTextView.setTextColor(mCompatTextView.getContext().getResources()
                         .getColor(R.color.secondary_text));
+                mCompatTextView.setBackgroundResource(0);
+                mCompatTextView.setPadding(0, 0, 0, 0);
             }
             mCompatTextView.setVisibility(View.VISIBLE);
         }

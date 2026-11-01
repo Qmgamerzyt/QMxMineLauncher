@@ -65,6 +65,22 @@ public class ModDetail extends ModItem {
     }
 
     /**
+     * Whether each version was built for the given game and loader, so a list may
+     * mark the ones the instance can run. Null when the game version is unknown or
+     * the host says nothing about what versions were built for.
+     */
+    public boolean[] compatibilityWith(String mcVersion, String loaderName) {
+        if(mcVersion == null || mcVersion.isEmpty() || mcVersionNames == null) return null;
+        boolean[] flags = new boolean[versionNames.length];
+        for(int i = 0; i < flags.length; i++) {
+            String builtFor = i < mcVersionNames.length ? mcVersionNames[i] : null;
+            flags[i] = mcVersion.equals(builtFor)
+                    && (loaderName == null || loaderName.isEmpty() || holdsLoader(i, loaderName));
+        }
+        return flags;
+    }
+
+    /**
      * The projects the version at the given index leans on, empty when the host
      * says nothing about them or the index is out of reach.
      */

@@ -29,6 +29,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="@dimen/padding_large"
+        android:gravity="center_vertical"
         android:textColor="@color/compat_green"
         android:textSize="@dimen/_11ssp"
         android:visibility="gone"
@@ -37,16 +38,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="@+id/mod_extended_site_button" />
 
-    <TextView
+    <Button
         android:id="@+id/mod_extended_site_button"
+        style="@style/MojoLauncher.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="?android:attr/selectableItemBackground"
+        android:minHeight="0dp"
+        android:minWidth="0dp"
         android:paddingHorizontal="@dimen/padding_medium"
-        android:paddingVertical="@dimen/padding_small"
         android:text="@string/content_open_site"
-        android:textColor="@color/secondary_text"
-        android:textSize="@dimen/_11ssp"
+        android:textColor="@color/minebutton_color"
+        android:textSize="@dimen/_12ssp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/mod_extended_version_spinner" />
 

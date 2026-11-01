@@ -13,8 +13,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.AppCompatSpinner;
 import androidx.fragment.app.FragmentActivity;
 
-import com.kdt.SimpleArrayAdapter;
-
 import git.artdeell.mojo.MojoApplication;
 import git.artdeell.mojo.R;
 import git.artdeell.mojo.instances.Instance;
@@ -24,6 +22,7 @@ import git.artdeell.mojo.modding.modpacks.models.ContentKind;
 import git.artdeell.mojo.modding.modpacks.models.ModDetail;
 import git.artdeell.mojo.Tools;
 import git.artdeell.mojo.instances.Instances;
+import git.artdeell.mojo.modding.modpacks.VersionEntryAdapter;
 import git.artdeell.mojo.modding.modpacks.models.ModItem;
 import git.artdeell.mojo.utils.DownloadStop;
 import git.artdeell.mojo.utils.lifecycle.ContextExecutor;
@@ -126,11 +125,12 @@ public class DependencyResolver {
         }
         for(int i = 0; i < dependencies.length; i++) {
             View row = LayoutInflater.from(context).inflate(R.layout.view_dependency_choice, rows, false);
-            ((TextView) row.findViewById(R.id.dependency_title)).setText(context.getString(
-                    dependencies[i].required
-                            ? R.string.content_dependencies_required
-                            : R.string.content_dependencies_optional,
-                    named(titles, dependencies[i])));
+            ((TextView) row.findViewById(R.id.dependency_title))
+                    .setText(named(titles, dependencies[i]));
+            // What the content cannot run without wears a badge of its own, the rest
+            // of the row stays the same either way
+            View neededBadge = row.findViewById(R.id.dependency_needed_badge);
+            neededBadge.setVisibility(dependencies[i].required ? View.VISIBLE : View.GONE);
             CheckBox tick = row.findViewById(R.id.dependency_tick);
             // The ones the content needs start ticked, every one of them may still be
             // taken off the list, the report says what falls over without them
@@ -142,8 +142,10 @@ public class DependencyResolver {
             AppCompatSpinner spinner = row.findViewById(R.id.dependency_version_spinner);
             if(dependencyDetail != null && dependencyDetail.versionNames != null
                     && dependencyDetail.versionNames.length > 0) {
-                spinner.setAdapter(new SimpleArrayAdapter<>(
-                        Arrays.asList(dependencyDetail.versionNames)));
+                VersionEntryAdapter versionAdapter = new VersionEntryAdapter(context);
+                versionAdapter.setVersions(Arrays.asList(dependencyDetail.versionNames),
+                        dependencyDetail.compatibilityWith(gameVersion, loaderName));
+                spinner.setAdapter(versionAdapter);
                 // The file that fits the instance is the one the list starts on
                 spinner.setSelection(dependencyDetail.bestVersionIndex(gameVersion, loaderName));
                 spinner.setVisibility(View.VISIBLE);
